@@ -46,6 +46,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodel.compose)
             implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(libs.androidx.biometric)
+            implementation(libs.androidx.fragment.ktx)
         }
 
         androidUnitTest.dependencies {

@@ -1,7 +1,7 @@
 package com.aritiq.calcnote
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.Lifecycle
@@ -10,7 +10,7 @@ import com.aritiq.calcnote.lock.LockManager
 import com.aritiq.calcnote.ui.App
 import org.koin.java.KoinJavaComponent.get
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
