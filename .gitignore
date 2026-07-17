@@ -1,0 +1,16 @@
+# Build outputs
+build/
+composeApp/build/
+.gradle/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local machine config
+local.properties
+
+# Generated analysis
+graphify-out/
