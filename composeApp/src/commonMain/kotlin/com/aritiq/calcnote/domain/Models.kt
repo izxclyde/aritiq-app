@@ -4,7 +4,7 @@ import kotlinx.datetime.Instant
 
 /**
  * Domain Note model — independent of SQLDelight-generated types so domain code never
- * knows what `CalcNoteDatabase` is. Mapping happens in the repository.
+ * knows what `AritiqDatabase` is. Mapping happens in the repository.
  */
 data class Note(
     val id: String,

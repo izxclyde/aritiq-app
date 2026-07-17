@@ -96,7 +96,7 @@ android {
 
 sqldelight {
     databases {
-        create("CalcNoteDatabase") {
+        create("AritiqDatabase") {
             packageName.set("com.aritiq.calcnote.data.db")
             srcDirs("src/commonMain/sqldelight")
         }

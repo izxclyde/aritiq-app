@@ -7,7 +7,7 @@ interface SettingsRepository {
 }
 
 class SqlDelightSettingsRepository(
-    private val db: com.aritiq.calcnote.data.db.CalcNoteDatabase,
+    private val db: com.aritiq.calcnote.data.db.AritiqDatabase,
 ) : SettingsRepository {
     override suspend fun get(key: String): String? {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

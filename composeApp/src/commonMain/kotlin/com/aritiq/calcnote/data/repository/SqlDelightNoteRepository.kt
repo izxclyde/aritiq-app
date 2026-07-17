@@ -2,7 +2,7 @@ package com.aritiq.calcnote.data.repository
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
-import com.aritiq.calcnote.data.db.CalcNoteDatabase
+import com.aritiq.calcnote.data.db.AritiqDatabase
 import com.aritiq.calcnote.data.db.Note as NoteRow
 import com.aritiq.calcnote.domain.Note
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +18,7 @@ import kotlinx.datetime.Instant
  * domain `Note`.
  */
 class SqlDelightNoteRepository(
-    private val db: CalcNoteDatabase,
+    private val db: AritiqDatabase,
 ) : NoteRepository {
 
     override fun recent(limit: Int, offset: Int): Flow<List<Note>> {

@@ -2,7 +2,7 @@ package com.aritiq.calcnote.di
 
 import android.content.Context
 import app.cash.sqldelight.db.SqlDriver
-import com.aritiq.calcnote.data.db.CalcNoteDatabase
+import com.aritiq.calcnote.data.db.AritiqDatabase
 import com.aritiq.calcnote.data.db.DriverFactory
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.repository.SettingsRepository
@@ -23,8 +23,8 @@ import org.koin.dsl.module
  */
 fun appModule(context: Context): Module = module {
     single<DriverFactory> { DriverFactory(context) }
-    single<SqlDriver> { get<DriverFactory>().createDriver(CalcNoteDatabase.Schema) }
-    single { CalcNoteDatabase(get()) }
+    single<SqlDriver> { get<DriverFactory>().createDriver(AritiqDatabase.Schema) }
+    single { AritiqDatabase(get()) }
     single<NoteRepository> { SqlDelightNoteRepository(get()) }
     single<SettingsRepository> { SqlDelightSettingsRepository(get()) }
     // ponytail: Home and Editor are factory-scoped (per-screen state). Settings is a

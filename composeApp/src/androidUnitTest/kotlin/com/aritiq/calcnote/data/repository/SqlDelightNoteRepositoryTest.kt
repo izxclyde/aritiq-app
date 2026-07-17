@@ -1,7 +1,7 @@
 package com.aritiq.calcnote.data.repository
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.aritiq.calcnote.data.db.CalcNoteDatabase
+import com.aritiq.calcnote.data.db.AritiqDatabase
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
 import kotlinx.coroutines.flow.first
@@ -22,13 +22,13 @@ import kotlin.test.assertTrue
 class SqlDelightNoteRepositoryTest {
 
     private lateinit var driver: JdbcSqliteDriver
-    private lateinit var db: CalcNoteDatabase
+    private lateinit var db: AritiqDatabase
     private lateinit var repo: NoteRepository
 
     @BeforeTest fun setUp() {
         driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        CalcNoteDatabase.Schema.create(driver)
-        db = CalcNoteDatabase(driver)
+        AritiqDatabase.Schema.create(driver)
+        db = AritiqDatabase(driver)
         repo = SqlDelightNoteRepository(db)
     }
 
