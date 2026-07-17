@@ -27,7 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,10 +54,6 @@ fun LockedFolderScreen(navigator: Navigator, lockManager: LockManager) {
     LaunchedEffect(Unit) {
         notes = repo.selectByFolder(LOCKED_FOLDER_ID)
         isLoading = false
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { lockManager.lock() }
     }
 
     Scaffold(
