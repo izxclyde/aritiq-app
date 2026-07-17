@@ -13,6 +13,7 @@ import com.aritiq.calcnote.ui.navigation.Route
 import com.aritiq.calcnote.ui.settings.SettingsScreen
 import com.aritiq.calcnote.ui.settings.SettingsViewModel
 import com.aritiq.calcnote.ui.theme.CalcNoteTheme
+import com.aritiq.calcnote.ui.theme.SystemBarAppearance
 import org.koin.compose.koinInject
 
 @Composable
@@ -30,6 +31,7 @@ fun App() {
     }
 
     CalcNoteTheme(darkTheme = darkTheme) {
+        SystemBarAppearance(darkTheme)
         val navigator = remember { Navigator() }
         when (val route = navigator.current.collectAsState().value) {
             Route.Home -> HomeScreen(navigator)

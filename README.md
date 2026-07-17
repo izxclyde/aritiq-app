@@ -234,6 +234,12 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - Delete confirmation dialog added to EditorScreen
 - Archived section no longer overlaps FAB (80dp bottom padding on lists + grid modes)
 
+### Save point — 2026-07-17 (night)
+- **Status bar fix**: Light mode had invisible status bar icons (white-on-cream). Fixed with
+  `enableEdgeToEdge()` + `SystemBarAppearance` expect/actual pair that toggles
+  `isAppearanceLightStatusBars` based on theme — dark icons in light mode, white in dark.
+- 73 unit tests still pass.
+
 ### Save point — 2026-07-17 (evening)
 - **Folders (Phase 3)**: Full CRUD via ManageFolders screen (create FAB, tap-to-rename, delete with confirmation). Folder chip row on Home filters note list. Folder picker in editor toolbar with primary tint when assigned. "Create new folder" inline from editor dropdown.
 - **Folder export/import**: `folders` array in JSON envelope. REPLACE mode deletes all folders first; MERGE skips existing by id. Backward-compatible (`ignoreUnknownKeys = true`).
