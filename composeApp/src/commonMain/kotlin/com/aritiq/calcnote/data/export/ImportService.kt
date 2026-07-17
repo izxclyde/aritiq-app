@@ -68,9 +68,9 @@ class ImportService(
 
     suspend fun importCsv(content: String): ImportResult {
         val cleaned = content.trim().removePrefix("\uFEFF")
-        val lines = cleaned.lines().filter { it.isNotBlank() }
-        if (lines.size < 2) return ImportResult(0, 0, listOf("CSV is empty or missing header"))
-        val header = lines.first().trim().removeSurrounding("\"").lowercase()
+        val rows = splitCsvRows(cleaned)
+        if (rows.isEmpty()) return ImportResult(0, 0, listOf("CSV is empty or missing header"))
+        val header = rows.first().trim().removeSurrounding("\"").lowercase()
         if (header != "title,content") {
             return ImportResult(0, 0, listOf("CSV must have 'title,content' header, got '$header'"))
         }
@@ -78,9 +78,9 @@ class ImportService(
         var imported = 0
         val now = Clock.System.now()
 
-        for (i in 1 until lines.size) {
+        for (i in 1 until rows.size) {
             try {
-                val (title, content) = parseCsvLine(lines[i])
+                val (title, content) = parseCsvLine(rows[i])
                 val note = com.aritiq.calcnote.domain.Note(
                     id = generateId(),
                     title = title,
@@ -91,10 +91,35 @@ class ImportService(
                 repo.upsert(note)
                 imported++
             } catch (e: Exception) {
-                return ImportResult(imported, 0, listOf("Error importing CSV line ${i + 1}: ${e.message}"))
+                return ImportResult(imported, 0, listOf("Error importing row ${i + 1}: ${e.message}"))
             }
         }
         return ImportResult(imported, 0, emptyList())
+    }
+
+    /** Split CSV text into rows, respecting quoted newlines. Does NOT interpret escape sequences. */
+    private fun splitCsvRows(text: String): List<String> {
+        val rows = mutableListOf<String>()
+        val cur = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '"') {
+                inQuotes = !inQuotes; cur.append(c); i++
+            } else if ((c == '\n' || c == '\r') && !inQuotes) {
+                val row = cur.toString().trim()
+                if (row.isNotBlank()) rows.add(row)
+                cur.clear()
+                if (c == '\r' && i + 1 < text.length && text[i + 1] == '\n') i++
+                i++
+            } else {
+                cur.append(c); i++
+            }
+        }
+        val last = cur.toString().trim()
+        if (last.isNotBlank()) rows.add(last)
+        return rows
     }
 
     private fun parseCsvLine(line: String): Pair<String, String> {
@@ -113,23 +138,54 @@ class ImportService(
             val title = sb.toString()
             val rest = if (i < line.length && line[i] == ',') line.substring(i + 1) else ""
             val content = if (rest.startsWith('"')) {
-                val csb = StringBuilder(); var j = 1
-                while (j < rest.length) {
-                    if (rest[j] == '"' && j + 1 < rest.length && rest[j + 1] == '"') {
-                        csb.append('"'); j += 2
-                    } else if (rest[j] == '"') {
-                        j++; break
-                    } else {
-                        csb.append(rest[j]); j++
-                    }
-                }
-                csb.toString()
-            } else rest
+                parseCsvQuotedValue(rest, 1)
+            } else rest.trim()
             Pair(title, content)
         } else {
-            val comma = line.indexOf(',')
-            if (comma < 0) Pair(line.trim(), "") else Pair(line.substring(0, comma).trim(), line.substring(comma + 1).trim())
+            val comma = findUnquotedComma(line, 0)
+            val title = if (comma < 0) line.trim() else line.substring(0, comma).trim()
+            val rawContent = if (comma < 0) "" else line.substring(comma + 1).trim()
+            val content = stripSurroundingQuotes(rawContent)
+            Pair(title, content)
         }
+    }
+
+    /** Find the first comma that is NOT inside a quoted region. */
+    private fun findUnquotedComma(s: String, start: Int): Int {
+        var inQ = false
+        var i = start
+        while (i < s.length) {
+            when (s[i]) {
+                '"' -> inQ = !inQ
+                ',' -> if (!inQ) return i
+            }
+            i++
+        }
+        return -1
+    }
+
+    /** Parse a CSV quoted value starting at the given offset (which should be on a `"`). */
+    private fun parseCsvQuotedValue(s: String, start: Int): String {
+        val sb = StringBuilder()
+        var j = start
+        while (j < s.length) {
+            if (s[j] == '"' && j + 1 < s.length && s[j + 1] == '"') {
+                sb.append('"'); j += 2
+            } else if (s[j] == '"') {
+                j++; break
+            } else {
+                sb.append(s[j]); j++
+            }
+        }
+        return sb.toString()
+    }
+
+    /** If the value is wrapped in `"..."`, strip them and unescape inner `""`. */
+    private fun stripSurroundingQuotes(value: String): String {
+        val t = value.trim()
+        return if (t.startsWith('"') && t.endsWith('"')) {
+            parseCsvQuotedValue(t, 1)
+        } else t
     }
 
     private fun generateId(): String =

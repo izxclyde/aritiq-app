@@ -41,6 +41,39 @@ class ImportServiceTest {
         assertEquals(2, result.imported)
     }
 
+    @Test fun import_csv_handles_content_with_commas() = runTest {
+        val repo = InMemoryNoteRepo()
+        val csv = "title,content\n\"List\",\"milk, eggs, bread\""
+        val svc = ImportService(repo)
+        val result = svc.importCsv(csv)
+        assertEquals(1, result.imported)
+        val note = repo.all().first()
+        assertEquals("List", note.title)
+        assertEquals("milk, eggs, bread", note.content)
+    }
+
+    @Test fun import_csv_handles_multiline_content() = runTest {
+        val repo = InMemoryNoteRepo()
+        val csv = "title,content\nGrocery,\"milk 10\neggs 20\nbread 15\""
+        val svc = ImportService(repo)
+        val result = svc.importCsv(csv)
+        assertEquals(1, result.imported)
+        val note = repo.all().first()
+        assertEquals("Grocery", note.title)
+        assertEquals("milk 10\neggs 20\nbread 15", note.content)
+    }
+
+    @Test fun import_csv_handles_escaped_quotes() = runTest {
+        val repo = InMemoryNoteRepo()
+        val csv = "title,content\nQuote,\"He said \"\"hello\"\"\""
+        val svc = ImportService(repo)
+        val result = svc.importCsv(csv)
+        assertEquals(1, result.imported)
+        val note = repo.all().first()
+        assertEquals("Quote", note.title)
+        assertEquals("He said \"hello\"", note.content)
+    }
+
     @Test fun import_csv_rejects_bad_header() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "bad,header\nhello,world"
