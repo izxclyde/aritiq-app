@@ -5,7 +5,7 @@ live — paper-notebook style. No accounts, no network, everything stored locall
 
 ## Stack
 - **Kotlin Multiplatform** (Android-first, single `composeApp` module) — Compose Multiplatform 1.8.2, Kotlin 2.2.20, Gradle 8.14
-- **SQLDelight 2.1.0** — local database (`CalcNoteDatabase`)
+- **SQLDelight 2.1.0** — local database (`AritiqDatabase`)
 - **Koin 4.0.0** — dependency injection
 - **Material 3** + custom paper theme (cream/warm-brown light, sepia/warm dark) — WCAG AA across all text/background pairs
 
@@ -72,7 +72,7 @@ composeApp/src/commonMain/kotlin/com/aritiq/calcnote/
     home/          HomeScreen, HomeViewModel
     settings/      SettingsScreen, SettingsViewModel
     navigation/    Navigator, Route
-    theme/         CalcNoteTheme, PaperComponents (grain overlay), editorTextStyle
+    theme/         AritiqTheme, PaperComponents (grain overlay), editorTextStyle
 ```
 
 ## Build & test
