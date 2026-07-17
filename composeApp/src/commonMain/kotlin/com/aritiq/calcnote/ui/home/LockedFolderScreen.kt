@@ -2,6 +2,7 @@ package com.aritiq.calcnote.ui.home
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -118,28 +119,26 @@ fun LockedFolderScreen(navigator: Navigator, lockManager: LockManager) {
 @Composable
 private fun LockedNoteRow(note: Note, onOpen: () -> Unit, onUnlock: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        Box(
+        Row(
             modifier = Modifier.weight(1f).clickable { onOpen() }.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
-            contentAlignment = Alignment.CenterStart,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(12.dp))
-                Box(Modifier.weight(1f)) {
-                    Text(
-                        note.title.ifBlank { "Untitled" },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        note.content.lineSequence().firstOrNull { it.isNotBlank() } ?: "",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    note.title.ifBlank { "Untitled" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    note.content.lineSequence().firstOrNull { it.isNotBlank() } ?: "",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         IconButton(onClick = onUnlock) {

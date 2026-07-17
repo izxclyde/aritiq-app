@@ -149,12 +149,18 @@ already in place.
 Swipe left on a note in list mode to archive (archive background slides in). Archived section at the bottom of the Home list — tap to expand, shows "Restore" and "Delete" actions. Delete shows a confirmation dialog ("Delete note? This cannot be undone.") before permanent removal. `selectArchived` query fetches archived notes. Grid modes show archived section below the grid.
 
 ### ✅ Folder-level lock
-A single fixed "Locked" folder. Notes are moved into it via multi-select on Home (lock icon in top bar)
-or from the editor folder picker. Locked notes are **completely isolated** — excluded from search,
-recent list, pinned, and export.
+A single fixed "Locked" folder (id `__locked__`, name "Locked") created on first launch via
+`ensureLockedFolderExists()`. Notes moved into it via multi-select lock on Home (not from editor).
+Locked notes are **completely isolated** — excluded from search, recent list, pinned, and export.
 
 - **Lock/unlock**: Locked section on Home with lock icon → tap → `BiometricPrompt` (fingerprint/face).
-- **Auto-relock**: App backgrounding resets `isUnlocked` via lifecycle observer.
+- **Separate screen**: `LockedFolderScreen` — full-screen list of locked notes with unlock button per row.
+- **Auto-lock**: App backgrounding (`ON_STOP`) calls `lockManager.lock()`. Navigating back from
+  `LockedFolderScreen` also auto-locks.
+- **Editor isolation**: Folder picker hidden when editing a locked note; Locked folder excluded from
+  EditorViewModel's folder list.
+- **System back**: `BackHandler` in `MainActivity` intercepts non-Home routes → `navigator.pop()`.
+- **Stack-based Navigator**: Replaced depth counter with `mutableListOf` stack for real back-stack.
 - **Manage Folders**: Locked folder shown non-interactive with padlock icon (no rename, no delete).
 - **No encryption-at-rest**: Visibility gating only. Encryption is a future enhancement.
 
@@ -241,5 +247,6 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - **Bug fix**: ManageFolders delete confirmation dialog was dead code (icon called `vm.delete()` directly). Wired to `deleteTarget` state.
 - **Bug fix**: Clearing search after folder-scoped search showed stale all-notes list instead of folder notes. Fixed.
 - **Status bar fix**: Light mode had invisible status bar icons (white-on-cream). Fixed with `enableEdgeToEdge()` + `SystemBarAppearance` expect/actual pair that toggles `isAppearanceLightStatusBars` based on theme — dark icons in light mode, white in dark.
-- **Locked folder**: Single fixed "Locked" folder created on first launch (`is_locked` flag). Notes moved via multi-select lock button or editor folder picker. Locked notes excluded from search, recent, pinned, export. Biometric unlock via `BiometricPrompt`. Auto-relock on app background. `is_locked` schema migration + `LockManager` interface + `AndroidLockManager`. `androidx.biometric:biometric:1.1.0` dependency added.
+- **Locked folder (initial)**: Single fixed "Locked" folder created on first launch (`is_locked` flag). Notes moved via multi-select lock button. Locked notes excluded from search, recent, pinned, export. Biometric unlock via `BiometricPrompt`. Auto-relock on app background. `is_locked` schema migration + migration `1.sqm`. `LockManager` interface + `AndroidLockManager`. `androidx.biometric:biometric:1.1.0` + `androidx.fragment:fragment-ktx:1.8.5` dependencies added.
 - 73 unit tests still pass.
+- **Lock refinement (2026-07-17)**: Separate `LockedFolderScreen` with per-row unlock button. Editor isolation: folder picker hidden for locked notes, LOCKED_FOLDER_ID excluded from folder list. `MainActivity` changed to `FragmentActivity` for BiometricPrompt. System `BackHandler` wired. Stack-based `Navigator` replaced depth counter. `LockedNoteRow` text overlap fixed (Box→Column). Build fixes: missing `Column` import, duplicate `@Composable` annotation.

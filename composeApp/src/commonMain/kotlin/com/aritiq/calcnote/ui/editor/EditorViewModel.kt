@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.editor
 
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
@@ -27,7 +28,7 @@ class EditorViewModel(
 
     fun open(noteId: String?) {
         scope.launch {
-            val folders = folderRepo.all()
+            val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             if (noteId == null) {
                 _state.value = UiState(loaded = true, folders = folders)
             } else {

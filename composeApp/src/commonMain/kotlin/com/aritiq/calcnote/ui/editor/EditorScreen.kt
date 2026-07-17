@@ -118,6 +118,7 @@ fun EditorScreen(
                     }
                 },
                 actions = {
+                    if (state.folderId != LOCKED_FOLDER_ID) {
                     Box {
                         IconButton(onClick = { showFolderMenu = true }) {
                             Icon(
@@ -135,11 +136,6 @@ fun EditorScreen(
                                 DropdownMenuItem(
                                     text = { Text(if (state.folderId == folder.id) "${folder.name} ✓" else folder.name) },
                                     onClick = { vm.setFolderId(folder.id); showFolderMenu = false },
-                                    leadingIcon = {
-                                        if (folder.id == LOCKED_FOLDER_ID) {
-                                            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        }
-                                    },
                                 )
                             }
                             HorizontalDivider()
@@ -148,6 +144,7 @@ fun EditorScreen(
                                 onClick = { showFolderMenu = false; showCreateFolderDialog = true },
                             )
                         }
+                    }
                     }
                     if (state.id != null) {
                         IconButton(onClick = {
