@@ -49,6 +49,7 @@ class AndroidLockManager(private val context: Context) : LockManager {
             BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Unlock Locked Folder")
                 .setSubtitle("Authenticate to view locked notes")
+                .setNegativeButtonText("Cancel")
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .build(),
         )
