@@ -155,18 +155,6 @@ class HomeViewModel(
 
     fun titleOf(content: String): String = NoteProcessor.titleOf(content)
 
-    fun setUnlocked(unlocked: Boolean) {
-        _state.value = _state.value.copy(isUnlocked = unlocked)
-        if (unlocked) loadLockedNotes() else _state.value = _state.value.copy(lockedFolderNotes = emptyList())
-    }
-
-    private fun loadLockedNotes() {
-        scope.launch {
-            val notes = repo.selectByFolder(LOCKED_FOLDER_ID)
-            _state.value = _state.value.copy(lockedFolderNotes = notes)
-        }
-    }
-
     fun moveToLocked(noteIds: Set<String>) {
         scope.launch {
             val now = Clock.System.now()
@@ -175,7 +163,6 @@ class HomeViewModel(
                 repo.upsert(note.copy(folderId = LOCKED_FOLDER_ID, updatedAt = now, isPinned = false))
             }
             reload()
-            if (_state.value.isUnlocked) loadLockedNotes()
         }
     }
 
@@ -236,7 +223,5 @@ class HomeViewModel(
         val selectedIds: Set<String> = emptySet(),
         val folders: List<Folder> = emptyList(),
         val selectedFolderId: String? = null,
-        val isUnlocked: Boolean = false,
-        val lockedFolderNotes: List<Note> = emptyList(),
     )
 }

@@ -5,9 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import com.aritiq.calcnote.lock.LockManager
 import com.aritiq.calcnote.ui.editor.EditorScreen
 import com.aritiq.calcnote.ui.folders.ManageFoldersScreen
 import com.aritiq.calcnote.ui.home.HomeScreen
+import com.aritiq.calcnote.ui.home.LockedFolderScreen
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
 import com.aritiq.calcnote.ui.settings.SettingsScreen
@@ -39,6 +41,10 @@ fun App() {
             Route.Settings -> SettingsScreen(navigator)
             Route.ManageFolders -> ManageFoldersScreen(navigator)
             Route.About -> HomeScreen(navigator)
+            Route.LockedFolder -> {
+                val lockManager = koinInject<LockManager>()
+                LockedFolderScreen(navigator, lockManager)
+            }
         }
     }
 }

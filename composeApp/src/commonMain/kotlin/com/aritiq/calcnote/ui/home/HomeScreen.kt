@@ -62,9 +62,6 @@ fun HomeScreen(navigator: Navigator) {
     LaunchedEffect(Unit) { vm.load() }
     val state by vm.state.collectAsState()
 
-    val isUnlocked by lockManager.isUnlocked.collectAsState()
-    LaunchedEffect(isUnlocked) { vm.setUnlocked(isUnlocked) }
-
     var showViewMenu by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
 
@@ -184,15 +181,22 @@ fun HomeScreen(navigator: Navigator) {
 
             FolderChipRow(state, vm)
 
-            if (state.query.isNotBlank()) {
-                SearchResults(state, vm, navigator)
-            } else {
-                when (state.viewMode) {
-                    ViewMode.SIMPLE_LIST -> SimpleList(state, vm, navigator, lockManager)
-                    ViewMode.DETAILED_LIST -> DetailedList(state, vm, navigator, lockManager)
-                    ViewMode.SMALL_GRID -> SmallGrid(state, vm, navigator, lockManager)
-                    ViewMode.LARGE_GRID -> LargeGrid(state, vm, navigator, lockManager)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (state.query.isNotBlank()) {
+                    SearchResults(state, vm, navigator)
+                } else {
+                    when (state.viewMode) {
+                        ViewMode.SIMPLE_LIST -> SimpleList(state, vm, navigator)
+                        ViewMode.DETAILED_LIST -> DetailedList(state, vm, navigator)
+                        ViewMode.SMALL_GRID -> SmallGrid(state, vm, navigator)
+                        ViewMode.LARGE_GRID -> LargeGrid(state, vm, navigator)
+                    }
                 }
+            }
+
+            if (lockManager.isAvailable()) {
+                LockedRow(lockManager, navigator)
+                Spacer(Modifier.height(80.dp))
             }
         }
     }
@@ -236,8 +240,8 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator, lockManager: LockManager) {
-    if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty() && state.lockedFolderNotes.isEmpty()) {
+private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
+    if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
         }
@@ -257,15 +261,14 @@ private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigato
                 }
             }
             archivedSection(state, vm, navigator)
-            lockedSection(state, vm, lockManager)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator, lockManager: LockManager) {
-    if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty() && state.lockedFolderNotes.isEmpty()) {
+private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
+    if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
         }
@@ -285,7 +288,6 @@ private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, naviga
                 }
             }
             archivedSection(state, vm, navigator)
-            lockedSection(state, vm, lockManager)
         }
     }
 }
@@ -329,82 +331,13 @@ private fun LazyListScope.archivedSection(
     }
 }
 
-private fun LazyListScope.lockedSection(
-    state: HomeViewModel.UiState,
-    vm: HomeViewModel,
-    lockManager: LockManager,
-) {
-    if (state.isUnlocked && state.lockedFolderNotes.isEmpty()) return
-    if (!state.isUnlocked && !lockManager.isAvailable()) return
-    item { LockedHeader(state, vm, lockManager) }
-    if (state.isUnlocked) {
-        items(state.lockedFolderNotes, key = { it.id + "_locked" }) { note ->
-            LockedNoteRow(note = note, onOpen = { /* open editor */ })
-        }
-    }
-}
-
-@Composable
-private fun LockedHeader(state: HomeViewModel.UiState, vm: HomeViewModel, lockManager: LockManager) {
-    val scope = rememberCoroutineScope()
-    val activity = androidx.compose.ui.platform.LocalContext.current
-    Surface(
-        onClick = {
-            if (state.isUnlocked) return@Surface
-            scope.launch { lockManager.authenticate(activity) }
-        },
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                if (state.isUnlocked) Icons.Filled.Lock else Icons.Outlined.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = if (state.isUnlocked) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (state.isUnlocked) "Locked (${state.lockedFolderNotes.size})" else "Locked",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.weight(1f),
-            )
-            if (!state.isUnlocked) {
-                Text("Tap to unlock", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-    HorizontalDivider()
-}
-
-@Composable
-private fun LockedNoteRow(note: Note, onOpen: () -> Unit) {
-    ListItem(
-        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
-        leadingContent = {
-            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-        },
-        headlineContent = {
-            Text(note.title.ifBlank { "Untitled" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        supportingContent = {
-            Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-        },
-    )
-    HorizontalDivider()
-}
-
 @Composable
 private fun ArchivedSectionColumn(
     state: HomeViewModel.UiState,
     vm: HomeViewModel,
     navigator: Navigator,
-    lockManager: LockManager,
 ) {
-    if (state.archived.isEmpty() && state.lockedFolderNotes.isEmpty()) return
+    if (state.archived.isEmpty()) return
     Column {
         ArchivedHeader(state, vm)
         HorizontalDivider()
@@ -505,15 +438,15 @@ private fun SwipeToArchive(note: Note, onArchive: () -> Unit, content: @Composab
 }
 
 @Composable
-private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator, lockManager: LockManager) {
+private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
     val notes = (if (state.pinned.isNotEmpty()) state.pinned else emptyList()) + state.recent
-    if (notes.isEmpty() && state.archived.isEmpty() && state.lockedFolderNotes.isEmpty()) {
+    if (notes.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
         }
     } else if (notes.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            ArchivedSectionColumn(state, vm, navigator, lockManager)
+            ArchivedSectionColumn(state, vm, navigator)
             Spacer(Modifier.height(80.dp))
         }
     } else {
@@ -529,22 +462,22 @@ private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                     NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
                 }
             }
-            ArchivedSectionColumn(state, vm, navigator, lockManager)
+            ArchivedSectionColumn(state, vm, navigator)
             Spacer(Modifier.height(80.dp))
         }
     }
 }
 
 @Composable
-private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator, lockManager: LockManager) {
+private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
     val notes = (if (state.pinned.isNotEmpty()) state.pinned else emptyList()) + state.recent
-    if (notes.isEmpty() && state.archived.isEmpty() && state.lockedFolderNotes.isEmpty()) {
+    if (notes.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
         }
     } else if (notes.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            ArchivedSectionColumn(state, vm, navigator, lockManager)
+            ArchivedSectionColumn(state, vm, navigator)
             Spacer(Modifier.height(80.dp))
         }
     } else {
@@ -559,7 +492,7 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                     NoteCardLarge(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, onTogglePin = { vm.togglePinned(note) }, vm = vm)
                 }
             }
-            ArchivedSectionColumn(state, vm, navigator, lockManager)
+            ArchivedSectionColumn(state, vm, navigator)
             Spacer(Modifier.height(80.dp))
         }
     }
@@ -695,6 +628,34 @@ private fun NoteCardLarge(note: Note, onOpen: () -> Unit, onTogglePin: () -> Uni
             Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 4, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@Composable
+private fun LockedRow(lockManager: LockManager, navigator: Navigator) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    Surface(
+        onClick = {
+            scope.launch {
+                if (lockManager.authenticate(context)) {
+                    navigator.navigate(Route.LockedFolder)
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Locked", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("Tap to unlock", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    HorizontalDivider()
 }
 
 @Composable

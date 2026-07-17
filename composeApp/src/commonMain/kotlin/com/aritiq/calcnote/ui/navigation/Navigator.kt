@@ -16,6 +16,7 @@ sealed class Route {
     data object Settings : Route()
     data object About : Route()
     data object ManageFolders : Route()
+    data object LockedFolder : Route()
 }
 
 class Navigator(initial: Route = Route.Home) {
