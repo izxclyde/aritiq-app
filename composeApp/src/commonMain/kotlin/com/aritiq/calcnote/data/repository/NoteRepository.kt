@@ -4,10 +4,6 @@ import com.aritiq.calcnote.domain.Note
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Instant
 
-/**
- * Ponytail: ViewModels depend on this — no UseCase layer. Single-implementation interface
- * keeps it swappable for tests; we avoid defining one without a caller.
- */
 interface NoteRepository {
     fun recent(limit: Int = 50, offset: Int = 0): Flow<List<Note>>
     suspend fun all(): List<Note>
@@ -21,5 +17,6 @@ interface NoteRepository {
     suspend fun setArchived(id: String, archived: Boolean)
     suspend fun setFavorite(id: String, favorite: Boolean)
     suspend fun selectByFolder(folderId: String): List<Note>
+    suspend fun selectByFolderExcluding(excludedId: String): List<Note>
     suspend fun tagsForNote(noteId: String): List<String>
 }

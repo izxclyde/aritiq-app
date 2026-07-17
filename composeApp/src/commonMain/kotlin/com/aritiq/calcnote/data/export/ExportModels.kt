@@ -59,6 +59,7 @@ data class NoteExport(
 data class FolderExport(
     val id: String,
     val name: String,
+    val isLocked: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
 ) {
@@ -66,6 +67,7 @@ data class FolderExport(
         fun fromDomain(folder: Folder): FolderExport = FolderExport(
             id = folder.id,
             name = folder.name,
+            isLocked = folder.isLocked,
             createdAt = folder.createdAt.toEpochMilliseconds(),
             updatedAt = folder.updatedAt.toEpochMilliseconds(),
         )
@@ -74,6 +76,7 @@ data class FolderExport(
     fun toDomain(): Folder = Folder(
         id = id,
         name = name,
+        isLocked = isLocked,
         createdAt = Instant.fromEpochMilliseconds(createdAt),
         updatedAt = Instant.fromEpochMilliseconds(updatedAt),
     )

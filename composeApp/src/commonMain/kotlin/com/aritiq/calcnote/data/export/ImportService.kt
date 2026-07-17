@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.data.export
 
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import kotlinx.serialization.json.Json
@@ -19,7 +20,6 @@ class ImportService(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Parse JSON export. Strips BOM if present. */
     suspend fun import(content: String, mode: ImportMode = ImportMode.MERGE): ImportResult {
         return importJson(content.trim().removePrefix("\uFEFF"), mode)
     }
@@ -36,13 +36,14 @@ class ImportService(
 
         if (mode == ImportMode.REPLACE) {
             val all = repo.all()
-            for (note in all) repo.delete(note.id)
+            for (note in all) if (note.folderId != LOCKED_FOLDER_ID) repo.delete(note.id)
             val folders = folderRepo.all()
-            for (f in folders) folderRepo.delete(f.id)
+            for (f in folders) if (f.id != LOCKED_FOLDER_ID) folderRepo.delete(f.id)
         }
 
         for (folderExport in envelope.folders) {
             try {
+                if (folderExport.id == LOCKED_FOLDER_ID) { skipped++; continue }
                 val folder = folderExport.toDomain()
                 val existing = folderRepo.getById(folder.id)
                 if (mode == ImportMode.MERGE && existing != null) {
@@ -64,6 +65,7 @@ class ImportService(
 
         for (noteExport in envelope.notes) {
             try {
+                if (noteExport.folderId == LOCKED_FOLDER_ID) { skipped++; continue }
                 if (mode == ImportMode.MERGE && noteExport.id in existingNoteIds) {
                     skipped++
                     continue
@@ -109,7 +111,6 @@ class ImportService(
         return ImportResult(imported, 0, emptyList())
     }
 
-    /** Split CSV text into rows, respecting quoted newlines. Does NOT interpret escape sequences. */
     private fun splitCsvRows(text: String): List<String> {
         val rows = mutableListOf<String>()
         val cur = StringBuilder()
@@ -162,7 +163,6 @@ class ImportService(
         }
     }
 
-    /** Find the first comma that is NOT inside a quoted region. */
     private fun findUnquotedComma(s: String, start: Int): Int {
         var inQ = false
         var i = start
@@ -176,7 +176,6 @@ class ImportService(
         return -1
     }
 
-    /** Parse a CSV quoted value starting at the given offset (which should be on a `"`). */
     private fun parseCsvQuotedValue(s: String, start: Int): String {
         val sb = StringBuilder()
         var j = start
@@ -192,7 +191,6 @@ class ImportService(
         return sb.toString()
     }
 
-    /** If the value is wrapped in `"..."`, strip them and unescape inner `""`. */
     private fun stripSurroundingQuotes(value: String): String {
         val t = value.trim()
         return if (t.startsWith('"') && t.endsWith('"')) {

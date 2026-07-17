@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.settings
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.AnnotatedString
 import com.aritiq.calcnote.appVersion
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.shareExport
@@ -72,7 +75,7 @@ fun SettingsScreen(navigator: Navigator) {
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text("Theme", style = MaterialTheme.typography.titleSmall)
             SettingsViewModel.ThemeMode.entries.forEach { mode ->
@@ -115,6 +118,17 @@ fun SettingsScreen(navigator: Navigator) {
             Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
             Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
+            ClickableText(
+                text = AnnotatedString("Website: www.hcnatividad.com"),
+                style = MaterialTheme.typography.bodyMedium,
+                onClick = {
+                    val intent =
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.hcnatividad.com"))
+                    context.startActivity(intent)
+                }
+            )
+            Spacer(Modifier.height(15.dp))
+            HorizontalDivider()
         }
     }
 

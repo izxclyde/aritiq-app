@@ -1,6 +1,7 @@
 CREATE TABLE folder (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
+  is_locked INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -11,8 +12,12 @@ SELECT * FROM folder WHERE id = :id;
 selectAll:
 SELECT * FROM folder ORDER BY name ASC;
 
+selectLocked:
+SELECT * FROM folder WHERE is_locked = 1;
+
 insertOrReplace:
-INSERT OR REPLACE INTO folder(id, name, created_at, updated_at) VALUES (:id, :name, :createdAt, :updatedAt);
+INSERT OR REPLACE INTO folder(id, name, is_locked, created_at, updated_at)
+VALUES (:id, :name, :isLocked, :createdAt, :updatedAt);
 
 deleteById:
 DELETE FROM folder WHERE id = :id;

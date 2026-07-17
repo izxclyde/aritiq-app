@@ -10,11 +10,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.domain.Folder
 import com.aritiq.calcnote.ui.navigation.Navigator
 import kotlinx.coroutines.launch
@@ -54,17 +56,33 @@ fun ManageFoldersScreen(navigator: Navigator) {
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(state.folders, key = { it.id }) { folder ->
-                    ListItem(
-                        headlineContent = { Text(folder.name) },
-                        leadingContent = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                        trailingContent = {
-                            IconButton(onClick = { deleteTarget = folder }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Delete")
-                            }
-                        },
-                        modifier = Modifier.clickable { renameTarget = folder },
-                    )
+                state.folders.forEach { folder ->
+                    if (folder.id == LOCKED_FOLDER_ID) {
+                        item(key = folder.id) {
+                            ListItem(
+                                headlineContent = { Text(folder.name) },
+                                leadingContent = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                            )
+                            HorizontalDivider()
+                        }
+                    } else {
+                        item(key = folder.id) {
+                            ListItem(
+                                headlineContent = { Text(folder.name) },
+                                leadingContent = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                                trailingContent = {
+                                    IconButton(onClick = { deleteTarget = folder }) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                                    }
+                                },
+                                modifier = Modifier.clickable { renameTarget = folder },
+                            )
+                            HorizontalDivider()
+                        }
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.drawBehind
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.FolderRepository
@@ -133,6 +135,11 @@ fun EditorScreen(
                                 DropdownMenuItem(
                                     text = { Text(if (state.folderId == folder.id) "${folder.name} ✓" else folder.name) },
                                     onClick = { vm.setFolderId(folder.id); showFolderMenu = false },
+                                    leadingIcon = {
+                                        if (folder.id == LOCKED_FOLDER_ID) {
+                                            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        }
+                                    },
                                 )
                             }
                             HorizontalDivider()

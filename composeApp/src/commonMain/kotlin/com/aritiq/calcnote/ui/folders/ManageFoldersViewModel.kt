@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.folders
 
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.domain.Folder
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +21,8 @@ class ManageFoldersViewModel(
 
     fun load() {
         scope.launch {
-            _state.value = _state.value.copy(folders = folderRepo.all())
+            val all = folderRepo.all()
+            _state.value = UiState(folders = all)
         }
     }
 
@@ -37,13 +39,14 @@ class ManageFoldersViewModel(
     fun rename(id: String, newName: String) {
         if (newName.isBlank()) return
         scope.launch {
-            val f = folderRepo.getById(id) ?: return@launch
-            folderRepo.upsert(f.copy(name = newName, updatedAt = Clock.System.now()))
+            val folder = folderRepo.getById(id) ?: return@launch
+            folderRepo.upsert(folder.copy(name = newName, updatedAt = Clock.System.now()))
             load()
         }
     }
 
     fun delete(id: String) {
+        if (id == LOCKED_FOLDER_ID) return
         scope.launch {
             folderRepo.delete(id)
             load()

@@ -21,6 +21,7 @@ data class Note(
 data class Folder(
     val id: String,
     val name: String,
+    val isLocked: Boolean = false,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

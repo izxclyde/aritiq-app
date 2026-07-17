@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.home
 
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
@@ -15,8 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 class HomeViewModel(
     private val repo: NoteRepository,
@@ -32,9 +35,9 @@ class HomeViewModel(
     fun load() {
         scope.launch {
             recentJob?.cancel()
-            val pinned = repo.pinned()
-            val archived = repo.archived()
-            val folders = folderRepo.all()
+            val pinned = repo.pinned().filter { it.folderId != LOCKED_FOLDER_ID }
+            val archived = repo.archived().filter { it.folderId != LOCKED_FOLDER_ID }
+            val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             val vm = ViewMode.fromString(settingsRepo.get("viewMode") ?: "")
             val so = SortOrder.fromString(settingsRepo.get("sortOrder") ?: "")
             _state.value = _state.value.copy(
@@ -42,6 +45,7 @@ class HomeViewModel(
                 folders = folders,
             )
             recentJob = repo.recent(50, 0)
+                .map { list -> list.filter { it.folderId != LOCKED_FOLDER_ID } }
                 .onEach { recent ->
                     val sorted = sort(recent, so)
                     val grouped = if (so == SortOrder.ALPHABETICAL) {
@@ -57,6 +61,7 @@ class HomeViewModel(
     }
 
     fun selectFolder(folderId: String?) {
+        recentJob?.cancel()
         _state.value = _state.value.copy(selectedFolderId = folderId)
         if (_state.value.query.isNotBlank()) {
             onSearch(_state.value.query)
@@ -109,7 +114,7 @@ class HomeViewModel(
             return
         }
         scope.launch {
-            val results = repo.search(q)
+            val results = repo.search(q).filter { it.folderId != LOCKED_FOLDER_ID }
             val folderId = _state.value.selectedFolderId
             val filtered = if (folderId != null) results.filter { it.folderId == folderId } else results
             _state.value = _state.value.copy(searchResults = filtered)
@@ -119,21 +124,21 @@ class HomeViewModel(
     fun togglePinned(note: Note) {
         scope.launch {
             repo.setPinned(note.id, !note.isPinned)
-            load()
+            reload()
         }
     }
 
     fun archive(note: Note) {
         scope.launch {
             repo.setArchived(note.id, true)
-            load()
+            reload()
         }
     }
 
     fun restore(note: Note) {
         scope.launch {
             repo.setArchived(note.id, false)
-            load()
+            reload()
         }
     }
 
@@ -144,17 +149,46 @@ class HomeViewModel(
     fun delete(id: String) {
         scope.launch {
             repo.delete(id)
-            load()
+            reload()
         }
     }
 
     fun titleOf(content: String): String = NoteProcessor.titleOf(content)
+
+    fun setUnlocked(unlocked: Boolean) {
+        _state.value = _state.value.copy(isUnlocked = unlocked)
+        if (unlocked) loadLockedNotes() else _state.value = _state.value.copy(lockedFolderNotes = emptyList())
+    }
+
+    private fun loadLockedNotes() {
+        scope.launch {
+            val notes = repo.selectByFolder(LOCKED_FOLDER_ID)
+            _state.value = _state.value.copy(lockedFolderNotes = notes)
+        }
+    }
+
+    fun moveToLocked(noteIds: Set<String>) {
+        scope.launch {
+            val now = Clock.System.now()
+            for (id in noteIds) {
+                val note = repo.getById(id) ?: continue
+                repo.upsert(note.copy(folderId = LOCKED_FOLDER_ID, updatedAt = now, isPinned = false))
+            }
+            reload()
+            if (_state.value.isUnlocked) loadLockedNotes()
+        }
+    }
 
     private fun sort(notes: List<Note>, order: SortOrder): List<Note> = when (order) {
         SortOrder.NEWEST_FIRST -> notes.sortedByDescending { it.createdAt }
         SortOrder.OLDEST_FIRST -> notes.sortedBy { it.createdAt }
         SortOrder.RECENTLY_EDITED -> notes.sortedByDescending { it.updatedAt }
         SortOrder.ALPHABETICAL -> notes.sortedBy { it.title.lowercase() }
+    }
+
+    private fun reload() {
+        val fid = _state.value.selectedFolderId
+        if (fid != null) selectFolder(fid) else load()
     }
 
     fun toggleSelectMode() {
@@ -202,5 +236,7 @@ class HomeViewModel(
         val selectedIds: Set<String> = emptySet(),
         val folders: List<Folder> = emptyList(),
         val selectedFolderId: String? = null,
+        val isUnlocked: Boolean = false,
+        val lockedFolderNotes: List<Note> = emptyList(),
     )
 }

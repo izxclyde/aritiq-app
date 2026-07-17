@@ -148,15 +148,15 @@ already in place.
 ### ✅ Archive / Trash
 Swipe left on a note in list mode to archive (archive background slides in). Archived section at the bottom of the Home list — tap to expand, shows "Restore" and "Delete" actions. Delete shows a confirmation dialog ("Delete note? This cannot be undone.") before permanent removal. `selectArchived` query fetches archived notes. Grid modes show archived section below the grid.
 
-### Folder-level lock
-A folder can be locked. Locked folders are hidden from the Home list until the user authenticates
-with biometrics (fingerprint / face) or a PIN code.
+### ✅ Folder-level lock
+A single fixed "Locked" folder. Notes are moved into it via multi-select on Home (lock icon in top bar)
+or from the editor folder picker. Locked notes are **completely isolated** — excluded from search,
+recent list, pinned, and export.
 
-- Lock toggle: long-press folder → "Lock with biometrics".
-- When locked: folder contents are **hidden** from Home, search, and recent lists.
-- Unlock: tapping the locked section triggers `BiometricPrompt` (Android) or `LocalAuthentication` (iOS).
-- Once authenticated, the folder is visible until the app goes to background.
-- No encryption-at-rest for note content — just visibility gating. Encryption is a future enhancement.
+- **Lock/unlock**: Locked section on Home with lock icon → tap → `BiometricPrompt` (fingerprint/face).
+- **Auto-relock**: App backgrounding resets `isUnlocked` via lifecycle observer.
+- **Manage Folders**: Locked folder shown non-interactive with padlock icon (no rename, no delete).
+- **No encryption-at-rest**: Visibility gating only. Encryption is a future enhancement.
 
 ---
 
@@ -241,4 +241,5 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - **Bug fix**: ManageFolders delete confirmation dialog was dead code (icon called `vm.delete()` directly). Wired to `deleteTarget` state.
 - **Bug fix**: Clearing search after folder-scoped search showed stale all-notes list instead of folder notes. Fixed.
 - **Status bar fix**: Light mode had invisible status bar icons (white-on-cream). Fixed with `enableEdgeToEdge()` + `SystemBarAppearance` expect/actual pair that toggles `isAppearanceLightStatusBars` based on theme — dark icons in light mode, white in dark.
+- **Locked folder**: Single fixed "Locked" folder created on first launch (`is_locked` flag). Notes moved via multi-select lock button or editor folder picker. Locked notes excluded from search, recent, pinned, export. Biometric unlock via `BiometricPrompt`. Auto-relock on app background. `is_locked` schema migration + `LockManager` interface + `AndroidLockManager`. `androidx.biometric:biometric:1.1.0` dependency added.
 - 73 unit tests still pass.

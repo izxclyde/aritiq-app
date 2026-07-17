@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.data.export
 
+import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import kotlinx.datetime.Clock
@@ -12,10 +13,11 @@ class ExportService(
     private val json = Json { encodeDefaults = true }
 
     suspend fun exportAllJson(): String {
-        val notes = repo.all().map { note ->
-            NoteExport.fromDomain(note, repo.tagsForNote(note.id))
-        }
-        val folders = folderRepo.all().map { FolderExport.fromDomain(it) }
+        val notes = repo.all()
+            .filter { it.folderId != LOCKED_FOLDER_ID }
+            .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
+        val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
+            .map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(
             exportedAt = Clock.System.now().toEpochMilliseconds(),
             notes = notes,
@@ -24,19 +26,21 @@ class ExportService(
         return json.encodeToString(AritiqExport.serializer(), envelope)
     }
 
-    suspend fun exportAllCsv(): String = buildCsv(repo.all())
+    suspend fun exportAllCsv(): String = buildCsv(repo.all().filter { it.folderId != LOCKED_FOLDER_ID })
 
     suspend fun exportNoteJson(noteId: String): String {
         val note = repo.getById(noteId) ?: return "{}"
+        if (note.folderId == LOCKED_FOLDER_ID) return "{}"
         val export = NoteExport.fromDomain(note, repo.tagsForNote(note.id))
         return json.encodeToString(NoteExport.serializer(), export)
     }
 
     suspend fun exportSelectedJson(noteIds: List<String>): String {
-        val notes = noteIds.mapNotNull { repo.getById(it) }.map { note ->
-            NoteExport.fromDomain(note, repo.tagsForNote(note.id))
-        }
-        val folders = folderRepo.all().map { FolderExport.fromDomain(it) }
+        val notes = noteIds.mapNotNull { repo.getById(it) }
+            .filter { it.folderId != LOCKED_FOLDER_ID }
+            .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
+        val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
+            .map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(
             exportedAt = Clock.System.now().toEpochMilliseconds(),
             notes = notes,
@@ -47,6 +51,7 @@ class ExportService(
 
     suspend fun exportSelectedCsv(noteIds: List<String>): String {
         val notes = noteIds.mapNotNull { repo.getById(it) }
+            .filter { it.folderId != LOCKED_FOLDER_ID }
         return buildCsv(notes)
     }
 
