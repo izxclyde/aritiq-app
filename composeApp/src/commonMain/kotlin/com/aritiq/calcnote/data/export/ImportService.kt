@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.data.export
 
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import kotlinx.serialization.json.Json
 import kotlinx.datetime.Clock
@@ -14,6 +15,7 @@ data class ImportResult(
 
 class ImportService(
     private val repo: NoteRepository,
+    private val folderRepo: FolderRepository,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -29,23 +31,40 @@ class ImportService(
             return ImportResult(0, 0, listOf("Invalid JSON: ${e.message}"))
         }
 
-        val existing = if (mode == ImportMode.MERGE) {
-            repo.all().map { it.id }.toSet()
-        } else {
-            emptySet()
-        }
-
         var imported = 0
         var skipped = 0
 
         if (mode == ImportMode.REPLACE) {
             val all = repo.all()
             for (note in all) repo.delete(note.id)
+            val folders = folderRepo.all()
+            for (f in folders) folderRepo.delete(f.id)
+        }
+
+        for (folderExport in envelope.folders) {
+            try {
+                val folder = folderExport.toDomain()
+                val existing = folderRepo.getById(folder.id)
+                if (mode == ImportMode.MERGE && existing != null) {
+                    skipped++
+                    continue
+                }
+                folderRepo.upsert(folder)
+                imported++
+            } catch (e: Exception) {
+                return ImportResult(imported, skipped, listOf("Error importing folder ${folderExport.id}: ${e.message}"))
+            }
+        }
+
+        val existingNoteIds = if (mode == ImportMode.MERGE) {
+            repo.all().map { it.id }.toSet()
+        } else {
+            emptySet()
         }
 
         for (noteExport in envelope.notes) {
             try {
-                if (mode == ImportMode.MERGE && noteExport.id in existing) {
+                if (mode == ImportMode.MERGE && noteExport.id in existingNoteIds) {
                     skipped++
                     continue
                 }

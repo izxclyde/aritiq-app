@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.data.export
 
+import com.aritiq.calcnote.domain.Folder
 import com.aritiq.calcnote.domain.Note
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
@@ -9,6 +10,7 @@ data class AritiqExport(
     val version: Int = 1,
     val exportedAt: Long,
     val notes: List<NoteExport>,
+    val folders: List<FolderExport> = emptyList(),
 )
 
 @Serializable
@@ -50,5 +52,29 @@ data class NoteExport(
         isArchived = isArchived,
         favorite = favorite,
         folderId = folderId,
+    )
+}
+
+@Serializable
+data class FolderExport(
+    val id: String,
+    val name: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+) {
+    companion object {
+        fun fromDomain(folder: Folder): FolderExport = FolderExport(
+            id = folder.id,
+            name = folder.name,
+            createdAt = folder.createdAt.toEpochMilliseconds(),
+            updatedAt = folder.updatedAt.toEpochMilliseconds(),
+        )
+    }
+
+    fun toDomain(): Folder = Folder(
+        id = id,
+        name = name,
+        createdAt = Instant.fromEpochMilliseconds(createdAt),
+        updatedAt = Instant.fromEpochMilliseconds(updatedAt),
     )
 }

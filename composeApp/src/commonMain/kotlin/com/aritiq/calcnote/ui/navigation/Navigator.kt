@@ -12,9 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 sealed class Route {
     data object Home : Route()
-    data class Editor(val noteId: String?) : Route()    // null = new note
+    data class Editor(val noteId: String?) : Route()
     data object Settings : Route()
     data object About : Route()
+    data object ManageFolders : Route()
 }
 
 class Navigator(initial: Route = Route.Home) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.drawBehind
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.shareExport
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.NoteProcessor
 import com.aritiq.calcnote.ui.navigation.Navigator
@@ -54,7 +56,8 @@ fun EditorScreen(
 ) {
     val repo = koinInject<NoteRepository>()
     val exportService = koinInject<ExportService>()
-    val vm = remember { EditorViewModel(repo, exportService) }
+    val folderRepo = koinInject<FolderRepository>()
+    val vm = remember { EditorViewModel(repo, exportService, folderRepo) }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(noteId) { vm.open(noteId) }
     val state by vm.state.collectAsState()
@@ -64,6 +67,8 @@ fun EditorScreen(
     // copy state.text into it exactly once. Using TextFieldValue to preserve cursor
     // position and IME state across recompositions (fixes keyboard reset bug).
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showFolderMenu by remember { mutableStateOf(false) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
     var textFieldValue by remember(noteId) { mutableStateOf(TextFieldValue("")) }
     var hasSynced by remember(noteId) { mutableStateOf(false) }
 
@@ -111,6 +116,32 @@ fun EditorScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        IconButton(onClick = { showFolderMenu = true }) {
+                            Icon(
+                                Icons.Filled.Folder,
+                                contentDescription = "Assign folder",
+                                tint = if (state.folderId != null) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            )
+                        }
+                        DropdownMenu(expanded = showFolderMenu, onDismissRequest = { showFolderMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(if (state.folderId == null) "No folder ✓" else "No folder") },
+                                onClick = { vm.setFolderId(null); showFolderMenu = false },
+                            )
+                            state.folders.forEach { folder ->
+                                DropdownMenuItem(
+                                    text = { Text(if (state.folderId == folder.id) "${folder.name} ✓" else folder.name) },
+                                    onClick = { vm.setFolderId(folder.id); showFolderMenu = false },
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("+ Create new folder") },
+                                onClick = { showFolderMenu = false; showCreateFolderDialog = true },
+                            )
+                        }
+                    }
                     if (state.id != null) {
                         IconButton(onClick = {
                             scope.launch {
@@ -217,6 +248,35 @@ fun EditorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showCreateFolderDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showCreateFolderDialog = false },
+            title = { Text("New folder") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { vm.createFolder(name) }
+                    showCreateFolderDialog = false
+                }) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateFolderDialog = false }) {
                     Text("Cancel")
                 }
             },

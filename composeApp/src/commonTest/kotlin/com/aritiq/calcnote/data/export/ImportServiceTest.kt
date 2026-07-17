@@ -13,7 +13,7 @@ class ImportServiceTest {
         repo.seed(com.aritiq.calcnote.domain.Note(id = "dup", title = "Existing", content = "keep", createdAt = now, updatedAt = now))
 
         val json = """{"version":1,"exportedAt":1000,"notes":[{"id":"dup","title":"Existing","content":"keep","createdAt":1000,"updatedAt":1000}]}"""
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importJson(json, ImportMode.MERGE)
         assertEquals(0, result.imported, "duplicate should be skipped")
         assertEquals(1, result.skipped)
@@ -25,7 +25,7 @@ class ImportServiceTest {
         repo.seed(com.aritiq.calcnote.domain.Note(id = "old", title = "Old", content = "gone", createdAt = now, updatedAt = now))
 
         val json = """{"version":1,"exportedAt":2000,"notes":[{"id":"new1","title":"New","content":"hello","createdAt":2000,"updatedAt":2000}]}"""
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importJson(json, ImportMode.REPLACE)
         assertEquals(1, result.imported)
         assertEquals(0, result.skipped)
@@ -36,7 +36,7 @@ class ImportServiceTest {
     @Test fun import_csv_adds_new_notes() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "title,content\nShopping,milk 10\ntotal,= 6000"
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importCsv(csv)
         assertEquals(2, result.imported)
     }
@@ -44,7 +44,7 @@ class ImportServiceTest {
     @Test fun import_csv_handles_content_with_commas() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "title,content\n\"List\",\"milk, eggs, bread\""
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importCsv(csv)
         assertEquals(1, result.imported)
         val note = repo.all().first()
@@ -55,7 +55,7 @@ class ImportServiceTest {
     @Test fun import_csv_handles_multiline_content() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "title,content\nGrocery,\"milk 10\neggs 20\nbread 15\""
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importCsv(csv)
         assertEquals(1, result.imported)
         val note = repo.all().first()
@@ -66,7 +66,7 @@ class ImportServiceTest {
     @Test fun import_csv_handles_escaped_quotes() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "title,content\nQuote,\"He said \"\"hello\"\"\""
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importCsv(csv)
         assertEquals(1, result.imported)
         val note = repo.all().first()
@@ -77,7 +77,7 @@ class ImportServiceTest {
     @Test fun import_csv_rejects_bad_header() = runTest {
         val repo = InMemoryNoteRepo()
         val csv = "bad,header\nhello,world"
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importCsv(csv)
         assertEquals(0, result.imported)
         assertTrue(result.errors.isNotEmpty())
@@ -85,7 +85,7 @@ class ImportServiceTest {
 
     @Test fun import_json_invalid_returns_error() = runTest {
         val repo = InMemoryNoteRepo()
-        val svc = ImportService(repo)
+        val svc = ImportService(repo, InMemoryFolderRepo())
         val result = svc.importJson("not json", ImportMode.MERGE)
         assertEquals(0, result.imported)
         assertTrue(result.errors.isNotEmpty())

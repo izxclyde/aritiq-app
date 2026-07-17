@@ -1,8 +1,10 @@
 package com.aritiq.calcnote.ui.home
 
 import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.repository.SettingsRepository
+import com.aritiq.calcnote.domain.Folder
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +22,7 @@ class HomeViewModel(
     private val repo: NoteRepository,
     private val settingsRepo: SettingsRepository,
     private val exportService: ExportService,
+    private val folderRepo: FolderRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -31,9 +34,13 @@ class HomeViewModel(
             recentJob?.cancel()
             val pinned = repo.pinned()
             val archived = repo.archived()
+            val folders = folderRepo.all()
             val vm = ViewMode.fromString(settingsRepo.get("viewMode") ?: "")
             val so = SortOrder.fromString(settingsRepo.get("sortOrder") ?: "")
-            _state.value = _state.value.copy(viewMode = vm, sortOrder = so, archived = archived)
+            _state.value = _state.value.copy(
+                viewMode = vm, sortOrder = so, archived = archived,
+                folders = folders,
+            )
             recentJob = repo.recent(50, 0)
                 .onEach { recent ->
                     val sorted = sort(recent, so)
@@ -41,10 +48,35 @@ class HomeViewModel(
                         sorted.map { GroupedItem.NoteItem(it) }
                     } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
                     _state.value = _state.value.copy(
-                        recent = sorted, pinned = pinned, archived = archived, sortedGroupedRecent = grouped, loading = false,
+                        recent = sorted, pinned = pinned, archived = archived,
+                        sortedGroupedRecent = grouped, loading = false,
                     )
                 }
                 .launchIn(scope)
+        }
+    }
+
+    fun selectFolder(folderId: String?) {
+        _state.value = _state.value.copy(selectedFolderId = folderId)
+        if (_state.value.query.isNotBlank()) {
+            onSearch(_state.value.query)
+            return
+        }
+        if (folderId == null) {
+            load()
+        } else {
+            scope.launch {
+                val notes = repo.selectByFolder(folderId)
+                val so = _state.value.sortOrder
+                val sorted = sort(notes, so)
+                val grouped = if (so == SortOrder.ALPHABETICAL) {
+                    sorted.map { GroupedItem.NoteItem(it) }
+                } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
+                _state.value = _state.value.copy(
+                    recent = sorted, pinned = emptyList(), archived = emptyList(),
+                    sortedGroupedRecent = grouped, loading = false,
+                )
+            }
         }
     }
 
@@ -68,9 +100,19 @@ class HomeViewModel(
 
     fun onSearch(q: String) {
         _state.value = _state.value.copy(query = q)
-        if (q.isBlank()) return
+        if (q.isBlank()) {
+            if (_state.value.selectedFolderId != null) {
+                selectFolder(_state.value.selectedFolderId)
+            } else {
+                load()
+            }
+            return
+        }
         scope.launch {
-            _state.value = _state.value.copy(searchResults = repo.search(q))
+            val results = repo.search(q)
+            val folderId = _state.value.selectedFolderId
+            val filtered = if (folderId != null) results.filter { it.folderId == folderId } else results
+            _state.value = _state.value.copy(searchResults = filtered)
         }
     }
 
@@ -158,5 +200,7 @@ class HomeViewModel(
         val loading: Boolean = true,
         val isSelecting: Boolean = false,
         val selectedIds: Set<String> = emptySet(),
+        val folders: List<Folder> = emptyList(),
+        val selectedFolderId: String? = null,
     )
 }

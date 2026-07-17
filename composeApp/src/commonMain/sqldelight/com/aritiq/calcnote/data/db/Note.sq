@@ -53,5 +53,8 @@ UPDATE note SET is_archived = :archived, updated_at = :updatedAt WHERE id = :id;
 setFavorite:
 UPDATE note SET favorite = :favorite, updated_at = :updatedAt WHERE id = :id;
 
+selectByFolder:
+SELECT * FROM note WHERE folder_id = :folderId AND is_archived = 0 ORDER BY updated_at DESC;
+
 -- ponytail: no separate 'trash' table — soft delete via is_archived = 1; adds an explicit_phase2 trash key.
 -- ponytail: schema only carries spec-listed fields; tags live in note_tag (Phase 2 lifted into a table).

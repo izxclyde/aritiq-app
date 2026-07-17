@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import com.aritiq.calcnote.ui.editor.EditorScreen
+import com.aritiq.calcnote.ui.folders.ManageFoldersScreen
 import com.aritiq.calcnote.ui.home.HomeScreen
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
@@ -34,6 +35,7 @@ fun App() {
             Route.Home -> HomeScreen(navigator)
             is Route.Editor -> EditorScreen(navigator, route.noteId)
             Route.Settings -> SettingsScreen(navigator)
+            Route.ManageFolders -> ManageFoldersScreen(navigator)
             Route.About -> HomeScreen(navigator)
         }
     }

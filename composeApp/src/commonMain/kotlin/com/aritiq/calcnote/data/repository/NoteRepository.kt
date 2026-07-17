@@ -20,5 +20,6 @@ interface NoteRepository {
     suspend fun setPinned(id: String, pinned: Boolean)
     suspend fun setArchived(id: String, archived: Boolean)
     suspend fun setFavorite(id: String, favorite: Boolean)
+    suspend fun selectByFolder(folderId: String): List<Note>
     suspend fun tagsForNote(noteId: String): List<String>
 }

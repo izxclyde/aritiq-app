@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.shareExport
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.ui.navigation.Navigator
@@ -47,7 +49,8 @@ fun HomeScreen(navigator: Navigator) {
     val repo = koinInject<NoteRepository>()
     val settingsRepo = koinInject<com.aritiq.calcnote.data.repository.SettingsRepository>()
     val exportService = koinInject<ExportService>()
-    val vm = remember { HomeViewModel(repo, settingsRepo, exportService) }
+    val folderRepo = koinInject<FolderRepository>()
+    val vm = remember { HomeViewModel(repo, settingsRepo, exportService, folderRepo) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.load() }
@@ -126,6 +129,11 @@ fun HomeScreen(navigator: Navigator) {
                                         onClick = { vm.setSortOrder(order) },
                                     )
                                 }
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Manage folders") },
+                                    onClick = { showViewMenu = false; navigator.navigate(Route.ManageFolders) },
+                                )
                             }
                         }
                         IconButton(onClick = { navigator.navigate(Route.Settings) }) {
@@ -157,6 +165,8 @@ fun HomeScreen(navigator: Navigator) {
                 } else null,
                 singleLine = true,
             )
+
+            FolderChipRow(state, vm)
 
             if (state.query.isNotBlank()) {
                 SearchResults(state, vm, navigator)
@@ -603,6 +613,31 @@ private fun NoteCardLarge(note: Note, onOpen: () -> Unit, onTogglePin: () -> Uni
             }
             Spacer(Modifier.height(8.dp))
             Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 4, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun FolderChipRow(state: HomeViewModel.UiState, vm: HomeViewModel) {
+    if (state.folders.isEmpty()) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = state.selectedFolderId == null,
+            onClick = { vm.selectFolder(null) },
+            label = { Text("All") },
+        )
+        state.folders.forEach { folder ->
+            FilterChip(
+                selected = state.selectedFolderId == folder.id,
+                onClick = { vm.selectFolder(folder.id) },
+                label = { Text(folder.name) },
+            )
         }
     }
 }

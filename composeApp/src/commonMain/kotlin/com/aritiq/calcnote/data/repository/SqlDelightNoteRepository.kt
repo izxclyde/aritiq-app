@@ -92,6 +92,12 @@ class SqlDelightNoteRepository(
         }
     }
 
+    override suspend fun selectByFolder(folderId: String): List<Note> {
+        return withContext(Dispatchers.IO) {
+            db.noteQueries.selectByFolder(folderId).executeAsList().map(::toDomain)
+        }
+    }
+
     override suspend fun setFavorite(id: String, favorite: Boolean) {
         withContext(Dispatchers.IO) {
             db.noteQueries.setFavorite(if (favorite) 1L else 0L, now(), id)

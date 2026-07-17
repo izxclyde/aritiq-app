@@ -1,7 +1,9 @@
 package com.aritiq.calcnote.ui.editor
 
 import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
+import com.aritiq.calcnote.domain.Folder
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
 import kotlinx.coroutines.CoroutineScope
@@ -14,17 +16,10 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
-/**
- * Ponytail: bottom-status content (word/char count + current sum) is computed locally
- * from [text]; no DB watcher for that — the editor re-derives it on every keystroke through
- * the snapshot pipeline at the Compose layer.
- *
- * Trailing-`=` detection is also a derived signal — Compose accumulates the new value on
- * commit, the VM never owns input state. VM speaks with the DB only on save.
- */
 class EditorViewModel(
     private val repo: NoteRepository,
     private val exportService: ExportService,
+    private val folderRepo: FolderRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -32,11 +27,12 @@ class EditorViewModel(
 
     fun open(noteId: String?) {
         scope.launch {
+            val folders = folderRepo.all()
             if (noteId == null) {
-                _state.value = UiState(loaded = true)
+                _state.value = UiState(loaded = true, folders = folders)
             } else {
                 val note = repo.getById(noteId)
-                _state.value = if (note != null) UiState.from(note).copy(loaded = true) else UiState(loaded = true)
+                _state.value = if (note != null) UiState.from(note).copy(loaded = true, folders = folders) else UiState(loaded = true, folders = folders)
             }
         }
     }
@@ -49,15 +45,26 @@ class EditorViewModel(
         val current = _state.value
         _state.value = current.copy(
             text = text,
-            // Only auto-derive title from content if the user hasn't manually edited it.
             title = if (current.titleEdited) current.title else NoteProcessor.titleOf(text),
             currentSum = NoteProcessor.liveTotal(text),
             stats = NoteProcessor.stats(text),
         )
     }
 
-    /** Persists the note and returns the id. Awaits the DB write so callers (back/delete)
-     *  can pop only after the row is committed. */
+    fun setFolderId(folderId: String?) {
+        _state.value = _state.value.copy(folderId = folderId)
+    }
+
+    fun createFolder(name: String) {
+        if (name.isBlank()) return
+        scope.launch {
+            val now = Clock.System.now()
+            val id = now.toEpochMilliseconds().toString(16) + "-" + (0..Int.MAX_VALUE).random().toString(16)
+            folderRepo.upsert(Folder(id = id, name = name, createdAt = now, updatedAt = now))
+            _state.value = _state.value.copy(folderId = id, folders = folderRepo.all())
+        }
+    }
+
     suspend fun save(): String {
         val s = _state.value
         val now = Clock.System.now()
@@ -71,7 +78,7 @@ class EditorViewModel(
             isPinned = s.isPinned,
             isArchived = false,
             favorite = false,
-            folderId = null,
+            folderId = s.folderId,
         )
         repo.upsert(note)
         _state.value = s.copy(id = id, createdAt = note.createdAt, updatedAt = note.updatedAt)
@@ -83,7 +90,6 @@ class EditorViewModel(
         return exportService.exportNoteJson(id)
     }
 
-    /** Deletes the note if it has been persisted. Awaits the DB write. */
     suspend fun delete() {
         val id = _state.value.id ?: return
         repo.delete(id)
@@ -99,6 +105,8 @@ class EditorViewModel(
         val createdAt: Instant? = null,
         val updatedAt: Instant? = null,
         val isPinned: Boolean = false,
+        val folderId: String? = null,
+        val folders: List<Folder> = emptyList(),
         val currentSum: Double = 0.0,
         val stats: NoteProcessor.Stats = NoteProcessor.Stats(0, 0),
         val loaded: Boolean = false,
@@ -112,6 +120,7 @@ class EditorViewModel(
                 createdAt = note.createdAt,
                 updatedAt = note.updatedAt,
                 isPinned = note.isPinned,
+                folderId = note.folderId,
                 currentSum = NoteProcessor.liveTotal(note.content),
                 stats = NoteProcessor.stats(note.content),
                 titleEdited = note.title.isNotBlank(),

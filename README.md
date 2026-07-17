@@ -66,10 +66,11 @@ total
 composeApp/src/commonMain/kotlin/com/aritiq/calcnote/
   calculator/      Pratt parser + evaluator + tests
   domain/          Note, NoteProcessor (text→sum), NoteProcessorTest
-  data/            repository/ (NoteRepository, SQLDelight impl), db/ (driver), sqldelight/ (schema)
-  ui/
-    editor/        EditorScreen, EditorViewModel
-    home/          HomeScreen, HomeViewModel
+    data/            repository/ (NoteRepository, FolderRepository, SQLDelight impls), db/ (driver), sqldelight/ (schema), export/ (ExportService, ImportService, ExportModels)
+    ui/
+      editor/        EditorScreen, EditorViewModel
+      folders/       ManageFoldersScreen, ManageFoldersViewModel
+      home/          HomeScreen, HomeViewModel
     settings/      SettingsScreen, SettingsViewModel
     navigation/    Navigator, Route
     theme/         AritiqTheme, PaperComponents (grain overlay), editorTextStyle
@@ -131,9 +132,14 @@ Search bar at the top of Home screen wired to `repo.searchByText`. Searches both
 
 ## Phase 3 — Organization & Security
 
-### Folders
-Create, rename, delete folders. Assign a note to a folder via a picker in the editor toolbar.
-Browse notes by folder on Home (section header or drawer). Schema (`folder` table) already in place.
+### ✅ Folders
+Full CRUD via a dedicated Manage Folders screen (reached from the MoreVert menu on Home).
+- **Create**: FAB on Manage Folders screen, or inline from the editor's folder picker dropdown ("+ Create new folder")
+- **Rename**: tap a folder in Manage Folders → rename dialog
+- **Delete**: trash icon with confirmation dialog (notes lose their folder assignment via FK `ON DELETE SET NULL`)
+- **Assign**: folder picker in the editor toolbar (folder icon, tinted primary when assigned)
+- **Filter**: horizontal chip row on Home below the search bar ("All" + each folder). Tapping a chip scopes the note list (and search results) to that folder.
+- **Export/Import**: folders are exported/imported as part of the JSON envelope (`folders` array), backward-compatible (`ignoreUnknownKeys = true`)
 
 ### Notes Tags
 Create tags, assign them to notes, filter the Home list by tag. Schema (`tag` + `note_tag` tables)
@@ -227,4 +233,13 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - Pin duplicate-key crash fixed: `selectRecent` excludes pinned notes (`WHERE is_pinned = 0`)
 - Delete confirmation dialog added to EditorScreen
 - Archived section no longer overlaps FAB (80dp bottom padding on lists + grid modes)
-- All Phases 1–4 above are ordered by priority and ready for implementation.
+
+### Save point — 2026-07-17 (evening)
+- **Folders (Phase 3)**: Full CRUD via ManageFolders screen (create FAB, tap-to-rename, delete with confirmation). Folder chip row on Home filters note list. Folder picker in editor toolbar with primary tint when assigned. "Create new folder" inline from editor dropdown.
+- **Folder export/import**: `folders` array in JSON envelope. REPLACE mode deletes all folders first; MERGE skips existing by id. Backward-compatible (`ignoreUnknownKeys = true`).
+- **Search scoped to folder**: search results filtered by current folder chip selection. Switching folders while searching re-scopes results.
+- **Material Icons Extended** added as dependency — proper `Folder`, `FolderOpen` etc. icons used throughout.
+- **Bug fix**: Home MoreVert dropdown had `HorizontalDivider` + "Manage folders" rendered outside the `DropdownMenu` (in the toolbar row), breaking toolbar layout. Fixed.
+- **Bug fix**: ManageFolders delete confirmation dialog was dead code (icon called `vm.delete()` directly). Wired to `deleteTarget` state.
+- **Bug fix**: Clearing search after folder-scoped search showed stale all-notes list instead of folder notes. Fixed.
+- 73 unit tests still pass.

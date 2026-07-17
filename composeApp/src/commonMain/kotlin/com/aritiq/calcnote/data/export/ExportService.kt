@@ -1,11 +1,13 @@
 package com.aritiq.calcnote.data.export
 
+import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 
 class ExportService(
     private val repo: NoteRepository,
+    private val folderRepo: FolderRepository,
 ) {
     private val json = Json { encodeDefaults = true }
 
@@ -13,9 +15,11 @@ class ExportService(
         val notes = repo.all().map { note ->
             NoteExport.fromDomain(note, repo.tagsForNote(note.id))
         }
+        val folders = folderRepo.all().map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(
             exportedAt = Clock.System.now().toEpochMilliseconds(),
             notes = notes,
+            folders = folders,
         )
         return json.encodeToString(AritiqExport.serializer(), envelope)
     }
@@ -32,9 +36,11 @@ class ExportService(
         val notes = noteIds.mapNotNull { repo.getById(it) }.map { note ->
             NoteExport.fromDomain(note, repo.tagsForNote(note.id))
         }
+        val folders = folderRepo.all().map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(
             exportedAt = Clock.System.now().toEpochMilliseconds(),
             notes = notes,
+            folders = folders,
         )
         return json.encodeToString(AritiqExport.serializer(), envelope)
     }
