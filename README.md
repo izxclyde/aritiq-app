@@ -93,12 +93,12 @@ Shipped features marked **✅**, items below are ordered within each phase.
 ## ✅ Fix — Dark mode
 Persisted theme setting now loads on cold start so System/Light/Dark works reliably.
 
-### ✅ Export / Import (JSON / CSV)
+### ✅ Export / Import (JSON)
 Single note (share icon in editor), selected notes (long-press multi-select on Home), or
 bulk (Settings). JSON preserves full schema (`id`, `title`, `content`, timestamps,
 `folderId`, `tags`, `isPinned`, `isArchived`, `favorite`, `drawing` for forward compat).
-CSV is `title, content` flat format. Import supports MERGE (skip duplicates by id) or
-REPLACE (wipe and load).
+Import supports MERGE (skip duplicates by id) or REPLACE (wipe and load). CSV code exists
+in the services but is deferred (JSON is more robust and data stays within the app).
 
 ---
 
@@ -212,12 +212,12 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - 59 unit tests (Calculator 21, NoteProcessor 29, SqlDelightNoteRepository 9)
 
 ### Save point — 2026-07-17
-- 70 unit tests (+6 ExportService, +5 ImportService)
+- 73 unit tests (+6 ExportService, +5 ImportService, +3 CSV edge cases)
 - Export/Import: single (editor share icon), selected (long-press multi-select on Home), bulk (Settings)
 - JSON export preserves full schema (including tags, drawing forward-compat)
-- CSV export: `title, content` with proper escaping
+- CSV export/import code exists but deferred — JSON-only in UI (CSV is fragile for multi-line content)
 - Import: MERGE (skip duplicates) or REPLACE (wipe then load). Auto-detects JSON vs CSV by content prefix.
-- FileProvider + share sheet for file export; OpenDocument for file import (accepts `application/json` + `text/*`)
+- FileProvider + share sheet for file export; OpenDocument for file import (JSON only)
 - Import fixes: BOM-stripping for Android content-resolver streams, dialog stays open during import with progress indicator, file-read errors shown as result text instead of silent catch
 - `selectAll` query added to Note.sq; `all()` + `tagsForNote()` on NoteRepository
 - `ExportService`, `ImportService`, `ExportModels` (serializable DTOs) in `data/export/`
