@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.home
 
+import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.repository.SettingsRepository
 import com.aritiq.calcnote.domain.Note
@@ -18,6 +19,7 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
     private val repo: NoteRepository,
     private val settingsRepo: SettingsRepository,
+    private val exportService: ExportService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -113,6 +115,42 @@ class HomeViewModel(
         SortOrder.ALPHABETICAL -> notes.sortedBy { it.title.lowercase() }
     }
 
+    fun toggleSelectMode() {
+        _state.value = _state.value.copy(
+            isSelecting = !_state.value.isSelecting,
+            selectedIds = emptySet(),
+        )
+    }
+
+    fun exitSelectMode() {
+        _state.value = _state.value.copy(isSelecting = false, selectedIds = emptySet())
+    }
+
+    fun toggleSelection(id: String) {
+        val current = _state.value.selectedIds
+        _state.value = _state.value.copy(
+            selectedIds = if (id in current) current - id else current + id,
+        )
+    }
+
+    fun selectAll() {
+        val all = _state.value.recent.map { it.id }.toSet() +
+            _state.value.pinned.map { it.id }
+        _state.value = _state.value.copy(selectedIds = all)
+    }
+
+    suspend fun exportSelectedJson(): String? {
+        val ids = _state.value.selectedIds.toList()
+        if (ids.isEmpty()) return null
+        return exportService.exportSelectedJson(ids)
+    }
+
+    suspend fun exportSelectedCsv(): String? {
+        val ids = _state.value.selectedIds.toList()
+        if (ids.isEmpty()) return null
+        return exportService.exportSelectedCsv(ids)
+    }
+
     data class UiState(
         val recent: List<Note> = emptyList(),
         val pinned: List<Note> = emptyList(),
@@ -124,5 +162,7 @@ class HomeViewModel(
         val viewMode: ViewMode = ViewMode.DETAILED_LIST,
         val sortOrder: SortOrder = SortOrder.NEWEST_FIRST,
         val loading: Boolean = true,
+        val isSelecting: Boolean = false,
+        val selectedIds: Set<String> = emptySet(),
     )
 }

@@ -1,5 +1,8 @@
 package com.aritiq.calcnote.ui.settings
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,10 +12,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import com.aritiq.calcnote.appVersion
+import com.aritiq.calcnote.data.export.ImportMode
+import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.ui.navigation.Navigator
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -21,6 +28,31 @@ fun SettingsScreen(navigator: Navigator) {
     BackHandler { navigator.pop() }
     val vm = koinInject<SettingsViewModel>().also { it.load() }
     val state by vm.state.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importContent by remember { mutableStateOf("") }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val input = context.contentResolver.openInputStream(uri)
+                    importContent = input?.bufferedReader()?.readText() ?: ""
+                    input?.close()
+                    if (importContent.isBlank()) {
+                        vm.importResult("File is empty")
+                    } else {
+                        showImportDialog = true
+                    }
+                } catch (e: Exception) {
+                    vm.importResult("Error reading file: ${e.message}")
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -53,11 +85,86 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
+            Text("Export", style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(
+                onClick = {
+                    scope.launch { shareExport(context, vm.exportAllJson(), "application/json", "aritiq-all.json") }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Export All as JSON")
+            }
+            OutlinedButton(
+                onClick = {
+                    scope.launch { shareExport(context, vm.exportAllCsv(), "text/csv", "aritiq-all.csv") }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Export All as CSV")
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Text("Import", style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(
+                onClick = { filePickerLauncher.launch(arrayOf("application/json", "text/*")) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Import from file")
+            }
+            state.importResult?.let { result ->
+                Text(result, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
             Text("About", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
             Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
         }
+    }
+
+    var importing by remember { mutableStateOf(false) }
+
+    if (showImportDialog && importContent.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { if (!importing) { showImportDialog = false; importContent = "" } },
+            title = { Text("Import notes") },
+            text = {
+                if (importing) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Importing...")
+                    }
+                } else {
+                    Text("Import with Merge (keep existing, skip duplicates) or Replace (delete all existing notes)?")
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !importing, onClick = {
+                    importing = true
+                    scope.launch {
+                        val result = vm.importFromString(importContent, ImportMode.REPLACE)
+                        showImportDialog = false; importContent = ""; importing = false
+                    }
+                }) {
+                    Text("Replace")
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !importing, onClick = {
+                    importing = true
+                    scope.launch {
+                        val result = vm.importFromString(importContent, ImportMode.MERGE)
+                        showImportDialog = false; importContent = ""; importing = false
+                    }
+                }) {
+                    Text("Merge")
+                }
+            },
+        )
     }
 }

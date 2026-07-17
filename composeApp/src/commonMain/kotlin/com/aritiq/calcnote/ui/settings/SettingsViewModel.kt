@@ -1,5 +1,8 @@
 package com.aritiq.calcnote.ui.settings
 
+import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.export.ImportMode
+import com.aritiq.calcnote.data.export.ImportService
 import com.aritiq.calcnote.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +18,8 @@ import kotlinx.coroutines.launch
  */
 class SettingsViewModel(
     private val repo: SettingsRepository,
+    private val exportService: ExportService,
+    private val importService: ImportService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -41,7 +46,24 @@ class SettingsViewModel(
         }
     }
 
+    fun importResult(msg: String) {
+        _state.value = _state.value.copy(importResult = msg)
+    }
+
+    suspend fun exportAllJson(): String = exportService.exportAllJson()
+
+    suspend fun exportAllCsv(): String = exportService.exportAllCsv()
+
+    suspend fun importFromString(content: String, mode: ImportMode): String {
+        val result = importService.import(content, mode)
+        val msg = "Imported: ${result.imported}, skipped: ${result.skipped}" +
+            if (result.errors.isNotEmpty()) "\nErrors: ${result.errors.joinToString(", ")}" else ""
+        _state.value = _state.value.copy(importResult = msg)
+        return msg
+    }
+
     data class UiState(
         val themeMode: ThemeMode = ThemeMode.System,
+        val importResult: String? = null,
     )
 }

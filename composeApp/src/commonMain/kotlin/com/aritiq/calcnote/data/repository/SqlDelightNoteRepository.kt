@@ -28,6 +28,12 @@ class SqlDelightNoteRepository(
             .map { it.map(::toDomain) }
     }
 
+    override suspend fun all(): List<Note> {
+        return withContext(Dispatchers.IO) {
+            db.noteQueries.selectAll().executeAsList().map(::toDomain)
+        }
+    }
+
     override suspend fun pinned(): List<Note> {
         return withContext(Dispatchers.IO) {
             db.noteQueries.selectPinned().executeAsList().map(::toDomain)
@@ -93,6 +99,12 @@ class SqlDelightNoteRepository(
     }
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
+
+    override suspend fun tagsForNote(noteId: String): List<String> {
+        return withContext(Dispatchers.IO) {
+            db.tagQueries.tagsForNote(noteId).executeAsList().map { it.name }
+        }
+    }
 
     private fun toDomain(row: NoteRow): Note = Note(
         id = row.id,

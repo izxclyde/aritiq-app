@@ -4,6 +4,8 @@ import android.content.Context
 import app.cash.sqldelight.db.SqlDriver
 import com.aritiq.calcnote.data.db.AritiqDatabase
 import com.aritiq.calcnote.data.db.DriverFactory
+import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.export.ImportService
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.repository.SettingsRepository
 import com.aritiq.calcnote.data.repository.SqlDelightNoteRepository
@@ -27,11 +29,14 @@ fun appModule(context: Context): Module = module {
     single { AritiqDatabase(get()) }
     single<NoteRepository> { SqlDelightNoteRepository(get()) }
     single<SettingsRepository> { SqlDelightSettingsRepository(get()) }
+    single { ExportService(get()) }
+    single { ImportService(get()) }
+
     // ponytail: Home and Editor are factory-scoped (per-screen state). Settings is a
     // single — it holds global state (theme) shared by App.kt and the settings screen.
-    factory { HomeViewModel(get(), get()) }
-    factory { EditorViewModel(get()) }
-    single { SettingsViewModel(get()) }
+    factory { HomeViewModel(get(), get(), get()) }
+    factory { EditorViewModel(get(), get()) }
+    single { SettingsViewModel(get(), get(), get()) }
 }
 
 private fun appModuleQualifier() = qualifier("app")

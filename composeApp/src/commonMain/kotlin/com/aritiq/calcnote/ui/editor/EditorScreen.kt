@@ -1,6 +1,7 @@
 package com.aritiq.calcnote.ui.editor
 
 import androidx.activity.compose.BackHandler
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -8,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +22,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.drawBehind
+import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.NoteProcessor
 import com.aritiq.calcnote.ui.navigation.Navigator
@@ -49,7 +53,9 @@ fun EditorScreen(
     noteId: String?,
 ) {
     val repo = koinInject<NoteRepository>()
-    val vm = remember { EditorViewModel(repo) }
+    val exportService = koinInject<ExportService>()
+    val vm = remember { EditorViewModel(repo, exportService) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(noteId) { vm.open(noteId) }
     val state by vm.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -105,6 +111,18 @@ fun EditorScreen(
                     }
                 },
                 actions = {
+                    if (state.id != null) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                val json = vm.exportJson()
+                                if (json != null) {
+                                    shareExport(context, json, "application/json", "${state.id}.json")
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export JSON")
+                        }
+                    }
                     IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete")
                     }

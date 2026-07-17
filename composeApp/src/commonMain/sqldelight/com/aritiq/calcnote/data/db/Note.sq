@@ -25,6 +25,9 @@ SELECT * FROM note WHERE is_pinned = 1 AND is_archived = 0 ORDER BY updated_at D
 countBy:
 SELECT COUNT(*) FROM note WHERE is_archived = 0;
 
+selectAll:
+SELECT * FROM note ORDER BY updated_at DESC;
+
 selectArchived:
 SELECT * FROM note WHERE is_archived = 1 ORDER BY updated_at DESC;
 

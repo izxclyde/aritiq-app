@@ -93,18 +93,16 @@ Shipped features marked **✅**, items below are ordered within each phase.
 ## ✅ Fix — Dark mode
 Persisted theme setting now loads on cold start so System/Light/Dark works reliably.
 
+### ✅ Export / Import (JSON / CSV)
+Single note (share icon in editor), selected notes (long-press multi-select on Home), or
+bulk (Settings). JSON preserves full schema (`id`, `title`, `content`, timestamps,
+`folderId`, `tags`, `isPinned`, `isArchived`, `favorite`, `drawing` for forward compat).
+CSV is `title, content` flat format. Import supports MERGE (skip duplicates by id) or
+REPLACE (wipe and load).
+
 ---
 
 ## Phase 2 — Polish & Data Portability
-
-### Export / Import (JSON / CSV)
-Single note, selected notes, or bulk transfer. Offline-only — no cloud.
-
-- **Export JSON**: preserves full schema — `id`, `title`, `content`, `createdAt`, `updatedAt`,
-  `folderId`, `tags`, `isPinned`, `isArchived`, `favorite`, `drawing` (handwritten strokes).
-- **Export CSV**: flat format — `title`, `content` columns for spreadsheet import.
-- **Import**: merge (append new notes, skip duplicates by id) or replace (wipe and load).
-- Target: share sheet / file picker / save to `Downloads`.
 
 ### ✅ About screen
 App: Aritiq · Version: from `BuildConfig.VERSION_NAME` · Developer: HNatividad. Shown at the bottom of Settings.
@@ -212,6 +210,17 @@ Items from the original spec and future enhancements that are not yet scheduled:
 
 ### Save point — 2026-07-16
 - 59 unit tests (Calculator 21, NoteProcessor 29, SqlDelightNoteRepository 9)
+
+### Save point — 2026-07-17
+- 70 unit tests (+6 ExportService, +5 ImportService)
+- Export/Import: single (editor share icon), selected (long-press multi-select on Home), bulk (Settings)
+- JSON export preserves full schema (including tags, drawing forward-compat)
+- CSV export: `title, content` with proper escaping
+- Import: MERGE (skip duplicates) or REPLACE (wipe then load). Auto-detects JSON vs CSV by content prefix.
+- FileProvider + share sheet for file export; OpenDocument for file import (accepts `application/json` + `text/*`)
+- Import fixes: BOM-stripping for Android content-resolver streams, dialog stays open during import with progress indicator, file-read errors shown as result text instead of silent catch
+- `selectAll` query added to Note.sq; `all()` + `tagsForNote()` on NoteRepository
+- `ExportService`, `ImportService`, `ExportModels` (serializable DTOs) in `data/export/`
 - App renamed CalcNote → Aritiq
 - Pin crash fixed: `Surface(onClick=)` → `Modifier.clickable` to avoid gesture conflict with ListItem
 - Flow subscription leak fixed: `recentJob?.cancel()` before new `launchIn` in `load()`

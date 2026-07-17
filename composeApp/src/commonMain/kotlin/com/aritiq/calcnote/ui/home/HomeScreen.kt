@@ -1,7 +1,9 @@
 package com.aritiq.calcnote.ui.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -13,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,10 +31,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aritiq.calcnote.data.export.ExportService
+import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +46,10 @@ import org.koin.compose.koinInject
 fun HomeScreen(navigator: Navigator) {
     val repo = koinInject<NoteRepository>()
     val settingsRepo = koinInject<com.aritiq.calcnote.data.repository.SettingsRepository>()
-    val vm = remember { HomeViewModel(repo, settingsRepo) }
+    val exportService = koinInject<ExportService>()
+    val vm = remember { HomeViewModel(repo, settingsRepo, exportService) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     LaunchedEffect(Unit) { vm.load() }
     val state by vm.state.collectAsState()
     var showViewMenu by remember { mutableStateOf(false) }
@@ -46,57 +57,93 @@ fun HomeScreen(navigator: Navigator) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Aritiq") },
-                actions = {
-                    Box {
-                        IconButton(onClick = { showViewMenu = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "View options")
+            if (state.isSelecting) {
+                TopAppBar(
+                    title = { Text("${state.selectedIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { vm.exitSelectMode() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Exit selection")
                         }
-                        DropdownMenu(
-                            expanded = showViewMenu,
-                            onDismissRequest = { showViewMenu = false },
-                        ) {
-                            ViewMode.entries.forEach { mode ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (state.viewMode == mode) {
-                                                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                            } else {
-                                                Spacer(Modifier.width(19.dp))
-                                            }
-                                            Text(mode.label)
-                                        }
-                                    },
-                                    onClick = { vm.setViewMode(mode) },
-                                )
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            scope.launch {
+                                val json = vm.exportSelectedJson()
+                                if (json != null) {
+                                    shareExport(context, json, "application/json", "aritiq-export.json")
+                                }
                             }
-                            HorizontalDivider()
-                            SortOrder.entries.forEach { order ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (state.sortOrder == order) {
-                                                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                            } else {
-                                                Spacer(Modifier.width(19.dp))
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export selected as JSON")
+                        }
+                        IconButton(onClick = {
+                            scope.launch {
+                                val csv = vm.exportSelectedCsv()
+                                if (csv != null) {
+                                    shareExport(context, csv, "text/csv", "aritiq-export.csv")
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export selected as CSV")
+                        }
+                        IconButton(onClick = { vm.exitSelectMode() }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Cancel")
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Aritiq") },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { showViewMenu = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "View options")
+                            }
+                            DropdownMenu(
+                                expanded = showViewMenu,
+                                onDismissRequest = { showViewMenu = false },
+                            ) {
+                                ViewMode.entries.forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (state.viewMode == mode) {
+                                                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                } else {
+                                                    Spacer(Modifier.width(19.dp))
+                                                }
+                                                Text(mode.label)
                                             }
-                                            Text(order.label)
-                                        }
-                                    },
-                                    onClick = { vm.setSortOrder(order) },
-                                )
+                                        },
+                                        onClick = { vm.setViewMode(mode) },
+                                    )
+                                }
+                                HorizontalDivider()
+                                SortOrder.entries.forEach { order ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (state.sortOrder == order) {
+                                                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                } else {
+                                                    Spacer(Modifier.width(19.dp))
+                                                }
+                                                Text(order.label)
+                                            }
+                                        },
+                                        onClick = { vm.setSortOrder(order) },
+                                    )
+                                }
                             }
                         }
-                    }
-                    IconButton(onClick = { navigator.navigate(Route.Settings) }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                },
-            )
+                        IconButton(onClick = { navigator.navigate(Route.Settings) }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                    },
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { navigator.navigate(Route.Editor(null)) }) {
@@ -393,7 +440,7 @@ private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) })
+                    NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
                 }
             }
             ArchivedSectionColumn(state, vm, navigator)
@@ -423,7 +470,7 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCardLarge(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, onTogglePin = { vm.togglePinned(note) })
+                    NoteCardLarge(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, onTogglePin = { vm.togglePinned(note) }, vm = vm)
                 }
             }
             ArchivedSectionColumn(state, vm, navigator)
@@ -433,22 +480,49 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun NoteRowSimple(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
-    Surface(modifier = Modifier.fillMaxWidth().clickable { onOpen() }, tonalElevation = 0.dp) {
-        Text(
-            text = note.title.ifBlank { "Untitled" },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    val state = vm.state.collectAsState().value
+    val selected = note.id in state.selectedIds
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (state.isSelecting) vm.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!state.isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
+            ),
+        tonalElevation = 0.dp,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = if (state.isSelecting) 8.dp else 16.dp)) {
+            if (state.isSelecting) {
+                Checkbox(checked = selected, onCheckedChange = { vm.toggleSelection(note.id) })
+            }
+            Text(
+                text = note.title.ifBlank { "Untitled" },
+                modifier = Modifier.padding(vertical = 12.dp),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
     HorizontalDivider()
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun NoteRowDetailed(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
+    val state = vm.state.collectAsState().value
+    val selected = note.id in state.selectedIds
     ListItem(
-        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (state.isSelecting) vm.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!state.isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
+            ),
+        leadingContent = if (state.isSelecting) {
+            { Checkbox(checked = selected, onCheckedChange = { vm.toggleSelection(note.id) }) }
+        } else null,
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (note.isPinned) {
@@ -473,16 +547,26 @@ private fun NoteRowDetailed(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
                 Text(if (note.isPinned) "Unpin" else "Pin", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
             }
         },
-        leadingContent = null,
     )
     HorizontalDivider()
 }
 
 @Composable
-private fun NoteCardSmall(note: Note, onOpen: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun NoteCardSmall(note: Note, onOpen: () -> Unit, vm: HomeViewModel?) {
+    val state = vm?.state?.collectAsState()?.value
+    val selected = state?.let { note.id in it.selectedIds } ?: false
+    val isSelecting = state?.isSelecting ?: false
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (isSelecting) vm?.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!isSelecting) { vm?.toggleSelectMode(); vm?.toggleSelection(note.id) } },
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(note.title.ifBlank { "Untitled" }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -493,10 +577,21 @@ private fun NoteCardSmall(note: Note, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun NoteCardLarge(note: Note, onOpen: () -> Unit, onTogglePin: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun NoteCardLarge(note: Note, onOpen: () -> Unit, onTogglePin: () -> Unit, vm: HomeViewModel?) {
+    val state = vm?.state?.collectAsState()?.value
+    val selected = state?.let { note.id in it.selectedIds } ?: false
+    val isSelecting = state?.isSelecting ?: false
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (isSelecting) vm?.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!isSelecting) { vm?.toggleSelectMode(); vm?.toggleSelection(note.id) } },
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -10,6 +10,7 @@ import kotlinx.datetime.Instant
  */
 interface NoteRepository {
     fun recent(limit: Int = 50, offset: Int = 0): Flow<List<Note>>
+    suspend fun all(): List<Note>
     suspend fun pinned(): List<Note>
     suspend fun archived(): List<Note>
     suspend fun search(query: String): List<Note>
@@ -19,4 +20,5 @@ interface NoteRepository {
     suspend fun setPinned(id: String, pinned: Boolean)
     suspend fun setArchived(id: String, archived: Boolean)
     suspend fun setFavorite(id: String, favorite: Boolean)
+    suspend fun tagsForNote(noteId: String): List<String>
 }

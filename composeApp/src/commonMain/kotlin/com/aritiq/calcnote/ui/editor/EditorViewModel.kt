@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.ui.editor
 
+import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
@@ -23,6 +24,7 @@ import kotlinx.datetime.Instant
  */
 class EditorViewModel(
     private val repo: NoteRepository,
+    private val exportService: ExportService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -74,6 +76,11 @@ class EditorViewModel(
         repo.upsert(note)
         _state.value = s.copy(id = id, createdAt = note.createdAt, updatedAt = note.updatedAt)
         return id
+    }
+
+    suspend fun exportJson(): String? {
+        val id = _state.value.id ?: return null
+        return exportService.exportNoteJson(id)
     }
 
     /** Deletes the note if it has been persisted. Awaits the DB write. */
