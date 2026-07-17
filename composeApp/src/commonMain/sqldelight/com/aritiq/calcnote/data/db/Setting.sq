@@ -1,0 +1,13 @@
+CREATE TABLE setting (
+  key TEXT PRIMARY KEY NOT NULL,
+  value_data TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO setting(key, value_data) VALUES (:key, :valueData);
+
+selectValue:
+SELECT value_data FROM setting WHERE key = :key;
+
+selectAll:
+SELECT * FROM setting;

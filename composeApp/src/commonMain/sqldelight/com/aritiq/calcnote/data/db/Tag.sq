@@ -1,0 +1,36 @@
+CREATE TABLE tag (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE note_tag (
+  note_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+  PRIMARY KEY (note_id, tag_id)
+);
+
+selectById:
+SELECT * FROM tag WHERE id = :id;
+
+selectAll:
+SELECT * FROM tag ORDER BY name ASC;
+
+insertOrReplace:
+INSERT OR REPLACE INTO tag(id, name, created_at) VALUES (:id, :name, :createdAt);
+
+deleteById:
+DELETE FROM tag WHERE id = :id;
+
+-- ponytail: tags schema lands now so the Phase 2 tags UI has nothing to migrate; usage is read-only here.
+linkNoteTag:
+INSERT OR IGNORE INTO note_tag(note_id, tag_id) VALUES (:noteId, :tagId);
+
+unlinkNoteTag:
+DELETE FROM note_tag WHERE note_id = :noteId AND tag_id = :tagId;
+
+tagsForNote:
+SELECT t.* FROM tag t
+INNER JOIN note_tag nt ON nt.tag_id = t.id
+WHERE nt.note_id = :noteId
+ORDER BY t.name ASC;

@@ -1,0 +1,63 @@
+package com.aritiq.calcnote.ui.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import com.aritiq.calcnote.appVersion
+import com.aritiq.calcnote.ui.navigation.Navigator
+import org.koin.compose.koinInject
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(navigator: Navigator) {
+    BackHandler { navigator.pop() }
+    val vm = koinInject<SettingsViewModel>().also { it.load() }
+    val state by vm.state.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = { navigator.pop() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Theme", style = MaterialTheme.typography.titleSmall)
+            SettingsViewModel.ThemeMode.entries.forEach { mode ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = state.themeMode == mode, onClick = { vm.setTheme(mode) })
+                    Text(mode.name)
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+            Text("About", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
+            Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
+            Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}

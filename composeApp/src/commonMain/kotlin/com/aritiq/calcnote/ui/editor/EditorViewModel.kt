@@ -1,0 +1,114 @@
+package com.aritiq.calcnote.ui.editor
+
+import com.aritiq.calcnote.data.repository.NoteRepository
+import com.aritiq.calcnote.domain.Note
+import com.aritiq.calcnote.domain.NoteProcessor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+
+/**
+ * Ponytail: bottom-status content (word/char count + current sum) is computed locally
+ * from [text]; no DB watcher for that — the editor re-derives it on every keystroke through
+ * the snapshot pipeline at the Compose layer.
+ *
+ * Trailing-`=` detection is also a derived signal — Compose accumulates the new value on
+ * commit, the VM never owns input state. VM speaks with the DB only on save.
+ */
+class EditorViewModel(
+    private val repo: NoteRepository,
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val _state = MutableStateFlow(UiState())
+    val state: StateFlow<UiState> = _state.asStateFlow()
+
+    fun open(noteId: String?) {
+        scope.launch {
+            if (noteId == null) {
+                _state.value = UiState(loaded = true)
+            } else {
+                val note = repo.getById(noteId)
+                _state.value = if (note != null) UiState.from(note).copy(loaded = true) else UiState(loaded = true)
+            }
+        }
+    }
+
+    fun updateTitle(newTitle: String) {
+        _state.value = _state.value.copy(title = newTitle, titleEdited = true)
+    }
+
+    fun updateText(text: String) {
+        val current = _state.value
+        _state.value = current.copy(
+            text = text,
+            // Only auto-derive title from content if the user hasn't manually edited it.
+            title = if (current.titleEdited) current.title else NoteProcessor.titleOf(text),
+            currentSum = NoteProcessor.liveTotal(text),
+            stats = NoteProcessor.stats(text),
+        )
+    }
+
+    /** Persists the note and returns the id. Awaits the DB write so callers (back/delete)
+     *  can pop only after the row is committed. */
+    suspend fun save(): String {
+        val s = _state.value
+        val now = Clock.System.now()
+        val id = s.id ?: generateId()
+        val note = Note(
+            id = id,
+            title = if (s.title.isNotBlank()) s.title else NoteProcessor.titleOf(s.text),
+            content = s.text,
+            createdAt = s.createdAt ?: now,
+            updatedAt = now,
+            isPinned = s.isPinned,
+            isArchived = false,
+            favorite = false,
+            folderId = null,
+        )
+        repo.upsert(note)
+        _state.value = s.copy(id = id, createdAt = note.createdAt, updatedAt = note.updatedAt)
+        return id
+    }
+
+    /** Deletes the note if it has been persisted. Awaits the DB write. */
+    suspend fun delete() {
+        val id = _state.value.id ?: return
+        repo.delete(id)
+    }
+
+    private fun generateId(): String =
+        Clock.System.now().toEpochMilliseconds().toString(16) + "-" + (0..Int.MAX_VALUE).random().toString(16)
+
+    data class UiState(
+        val id: String? = null,
+        val text: String = "",
+        val title: String = "",
+        val createdAt: Instant? = null,
+        val updatedAt: Instant? = null,
+        val isPinned: Boolean = false,
+        val currentSum: Double = 0.0,
+        val stats: NoteProcessor.Stats = NoteProcessor.Stats(0, 0),
+        val loaded: Boolean = false,
+        val titleEdited: Boolean = false,
+    ) {
+        companion object {
+            fun from(note: Note): UiState = UiState(
+                id = note.id,
+                text = note.content,
+                title = note.title,
+                createdAt = note.createdAt,
+                updatedAt = note.updatedAt,
+                isPinned = note.isPinned,
+                currentSum = NoteProcessor.liveTotal(note.content),
+                stats = NoteProcessor.stats(note.content),
+                titleEdited = note.title.isNotBlank(),
+            )
+        }
+    }
+}
