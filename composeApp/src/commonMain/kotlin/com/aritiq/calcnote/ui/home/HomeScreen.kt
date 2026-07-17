@@ -76,16 +76,6 @@ fun HomeScreen(navigator: Navigator) {
                         }) {
                             Icon(Icons.Filled.Share, contentDescription = "Export selected as JSON")
                         }
-                        IconButton(onClick = {
-                            scope.launch {
-                                val csv = vm.exportSelectedCsv()
-                                if (csv != null) {
-                                    shareExport(context, csv, "text/csv", "aritiq-export.csv")
-                                }
-                            }
-                        }) {
-                            Icon(Icons.Filled.Share, contentDescription = "Export selected as CSV")
-                        }
                         IconButton(onClick = { vm.exitSelectMode() }) {
                             Icon(Icons.Filled.Close, contentDescription = "Cancel")
                         }

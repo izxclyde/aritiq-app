@@ -17,16 +17,9 @@ class ImportService(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Auto-detect JSON vs CSV by content prefix. Strips BOM if present. */
+    /** Parse JSON export. Strips BOM if present. */
     suspend fun import(content: String, mode: ImportMode = ImportMode.MERGE): ImportResult {
-        val cleaned = content.trim().removePrefix("\uFEFF")
-        return if (cleaned.startsWith("{")) {
-            importJson(cleaned, mode)
-        } else if (cleaned.startsWith("title,content") || cleaned.startsWith('"')) {
-            importCsv(cleaned)
-        } else {
-            ImportResult(0, 0, listOf("Unrecognized format — expected JSON (starts with {) or CSV (starts with 'title,content' or '\"')"))
-        }
+        return importJson(content.trim().removePrefix("\uFEFF"), mode)
     }
 
     suspend fun importJson(content: String, mode: ImportMode): ImportResult {

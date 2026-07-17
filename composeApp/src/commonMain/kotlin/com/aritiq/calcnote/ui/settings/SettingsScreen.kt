@@ -94,19 +94,11 @@ fun SettingsScreen(navigator: Navigator) {
             ) {
                 Text("Export All as JSON")
             }
-            OutlinedButton(
-                onClick = {
-                    scope.launch { shareExport(context, vm.exportAllCsv(), "text/csv", "aritiq-all.csv") }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Export All as CSV")
-            }
 
             Spacer(Modifier.height(16.dp))
             Text("Import", style = MaterialTheme.typography.titleSmall)
             OutlinedButton(
-                onClick = { filePickerLauncher.launch(arrayOf("application/json", "text/*")) },
+                onClick = { filePickerLauncher.launch(arrayOf("application/json")) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Import from file")

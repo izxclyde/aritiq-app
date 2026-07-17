@@ -52,8 +52,6 @@ class SettingsViewModel(
 
     suspend fun exportAllJson(): String = exportService.exportAllJson()
 
-    suspend fun exportAllCsv(): String = exportService.exportAllCsv()
-
     suspend fun importFromString(content: String, mode: ImportMode): String {
         val result = importService.import(content, mode)
         val msg = "Imported: ${result.imported}, skipped: ${result.skipped}" +

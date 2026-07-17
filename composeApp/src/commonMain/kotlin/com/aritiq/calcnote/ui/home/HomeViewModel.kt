@@ -145,12 +145,6 @@ class HomeViewModel(
         return exportService.exportSelectedJson(ids)
     }
 
-    suspend fun exportSelectedCsv(): String? {
-        val ids = _state.value.selectedIds.toList()
-        if (ids.isEmpty()) return null
-        return exportService.exportSelectedCsv(ids)
-    }
-
     data class UiState(
         val recent: List<Note> = emptyList(),
         val pinned: List<Note> = emptyList(),
