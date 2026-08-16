@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.sqldelight)
 }
 
+group = "com.aritiq.calcnote"
+
 kotlin {
     androidTarget {
         compilations.all {
@@ -106,3 +108,4 @@ sqldelight {
         }
     }
 }
+

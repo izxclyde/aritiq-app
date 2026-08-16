@@ -4,6 +4,7 @@ import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.ImportService
 import com.aritiq.calcnote.data.repository.SettingsRepository
+import com.aritiq.calcnote.ui.theme.NotebookAccent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,8 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Settings holder: theme mode (System / Light / Dark). Persisted offline in the local
- * settings table.
+ * Settings holder: theme mode (System / Light / Dark) + notebook accent.
+ * Persisted offline in the local settings table.
  */
 class SettingsViewModel(
     private val repo: SettingsRepository,
@@ -30,6 +31,7 @@ class SettingsViewModel(
             val all = repo.all()
             _state.value = UiState(
                 themeMode = ThemeMode.fromString(all["theme"] ?: "system"),
+                accent = NotebookAccent.fromString(all["accent"] ?: ""),
             )
         }
     }
@@ -37,6 +39,11 @@ class SettingsViewModel(
     fun setTheme(mode: ThemeMode) {
         _state.value = _state.value.copy(themeMode = mode)
         scope.launch { repo.set("theme", mode.persisted) }
+    }
+
+    fun setAccent(accent: NotebookAccent) {
+        _state.value = _state.value.copy(accent = accent)
+        scope.launch { repo.set("accent", accent.name) }
     }
 
     enum class ThemeMode(val persisted: String) {
@@ -62,6 +69,7 @@ class SettingsViewModel(
 
     data class UiState(
         val themeMode: ThemeMode = ThemeMode.System,
+        val accent: NotebookAccent = NotebookAccent.TEAL,
         val importResult: String? = null,
     )
 }

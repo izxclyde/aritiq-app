@@ -5,10 +5,8 @@
       Compose Material3 takes over rendering once MainActivity's setContent block runs;
       this XML theme only paints the splash window before Compose attaches.
     -->
-    <style name="Theme.CalcNote" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.Aritiq" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/sepia_paper</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
-
-    <style name="Theme.CalcNote.Splash" parent="Theme.CalcNote" />
 </resources>

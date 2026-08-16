@@ -20,15 +20,23 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,10 +50,14 @@ import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.lock.LockManager
+import com.aritiq.calcnote.ui.components.EmptyState
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,7 +68,7 @@ fun HomeScreen(navigator: Navigator) {
     val exportService = koinInject<ExportService>()
     val folderRepo = koinInject<FolderRepository>()
     val lockManager = koinInject<LockManager>()
-    val vm = remember { HomeViewModel(repo, settingsRepo, exportService, folderRepo) }
+    val vm = remember { HomeViewModel(repo, settingsRepo, exportService, folderRepo, lockManager) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.load() }
@@ -76,6 +88,9 @@ fun HomeScreen(navigator: Navigator) {
                         }
                     },
                     actions = {
+                        IconButton(onClick = { vm.selectAll() }) {
+                            Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
+                        }
                         IconButton(onClick = {
                             scope.launch {
                                 val json = vm.exportSelectedJson()
@@ -86,14 +101,13 @@ fun HomeScreen(navigator: Navigator) {
                         }) {
                             Icon(Icons.Filled.Share, contentDescription = "Export selected as JSON")
                         }
-                        IconButton(onClick = {
-                            vm.moveToLocked(state.selectedIds)
-                            vm.exitSelectMode()
-                        }) {
-                            Icon(Icons.Filled.Lock, contentDescription = "Move to Locked folder")
-                        }
-                        IconButton(onClick = { vm.exitSelectMode() }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Cancel")
+                        if (lockManager.isAvailable()) {
+                            IconButton(onClick = {
+                                vm.moveToLocked(state.selectedIds)
+                                vm.exitSelectMode()
+                            }) {
+                                Icon(Icons.Filled.Lock, contentDescription = "Move to Locked folder")
+                            }
                         }
                     },
                 )
@@ -111,34 +125,20 @@ fun HomeScreen(navigator: Navigator) {
                             ) {
                                 ViewMode.entries.forEach { mode ->
                                     DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (state.viewMode == mode) {
-                                                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                } else {
-                                                    Spacer(Modifier.width(19.dp))
-                                                }
-                                                Text(mode.label)
-                                            }
-                                        },
+                                        text = { Text(mode.label) },
+                                        leadingIcon = if (state.viewMode == mode) {
+                                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                        } else null,
                                         onClick = { vm.setViewMode(mode) },
                                     )
                                 }
                                 HorizontalDivider()
                                 SortOrder.entries.forEach { order ->
                                     DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (state.sortOrder == order) {
-                                                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                } else {
-                                                    Spacer(Modifier.width(19.dp))
-                                                }
-                                                Text(order.label)
-                                            }
-                                        },
+                                        text = { Text(order.label) },
+                                        leadingIcon = if (state.sortOrder == order) {
+                                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                        } else null,
                                         onClick = { vm.setSortOrder(order) },
                                     )
                                 }
@@ -157,7 +157,11 @@ fun HomeScreen(navigator: Navigator) {
             }
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { navigator.navigate(Route.Editor(null)) }) {
+            FloatingActionButton(
+                onClick = { navigator.navigate(Route.Editor(null)) },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Create note")
             }
         },
@@ -225,14 +229,52 @@ fun HomeScreen(navigator: Navigator) {
 private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
     if (state.searchResults.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No results", style = MaterialTheme.typography.bodyLarge)
+            EmptyState(
+                icon = Icons.Outlined.SearchOff,
+                title = "No results",
+            )
         }
-    } else {
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
+        return
+    }
+    when (state.viewMode) {
+        ViewMode.SIMPLE_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
+            items(state.searchResults, key = { it.id }) { note ->
+                SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
+                    NoteRowSimple(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                }
+            }
+        }
+        ViewMode.DETAILED_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
             items(state.searchResults, key = { it.id }) { note ->
                 SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
                     NoteRowDetailed(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
                 }
+            }
+        }
+        ViewMode.SMALL_GRID -> LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(state.searchResults, key = { it.id }) { note ->
+                NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+            }
+        }
+        ViewMode.LARGE_GRID -> LazyVerticalGrid(
+            columns = GridCells.Fixed(1),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(state.searchResults, key = { it.id }) { note ->
+                NoteCardLarge(
+                    note = note,
+                    onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                    onTogglePin = { vm.togglePinned(note) },
+                    vm = vm,
+                )
             }
         }
     }
@@ -243,7 +285,12 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
 private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
     if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
+            EmptyState(
+                icon = Icons.Outlined.EditNote,
+                title = "No notes yet",
+                actionLabel = "Create note",
+                onAction = { navigator.navigate(Route.Editor(null)) },
+            )
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
@@ -270,7 +317,12 @@ private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigato
 private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, navigator: Navigator) {
     if (state.pinned.isEmpty() && state.sortedGroupedRecent.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
+            EmptyState(
+                icon = Icons.Outlined.EditNote,
+                title = "No notes yet",
+                actionLabel = "Create note",
+                onAction = { navigator.navigate(Route.Editor(null)) },
+            )
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
@@ -364,7 +416,11 @@ private fun ArchivedHeader(state: HomeViewModel.UiState, vm: HomeViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Archived (${state.archived.size})", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text(if (state.showArchived) "\u25B2" else "\u25BC", style = MaterialTheme.typography.labelSmall)
+            Icon(
+                if (state.showArchived) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (state.showArchived) "Collapse archived" else "Expand archived",
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
     HorizontalDivider()
@@ -428,7 +484,16 @@ private fun SwipeToArchive(note: Note, onArchive: () -> Unit, content: @Composab
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer).padding(end = 20.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                Text("Archive", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Archive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Archive", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
             }
         },
         enableDismissFromStartToEnd = false,
@@ -442,7 +507,12 @@ private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
     val notes = (if (state.pinned.isNotEmpty()) state.pinned else emptyList()) + state.recent
     if (notes.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
+            EmptyState(
+                icon = Icons.Outlined.EditNote,
+                title = "No notes yet",
+                actionLabel = "Create note",
+                onAction = { navigator.navigate(Route.Editor(null)) },
+            )
         }
     } else if (notes.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -473,7 +543,12 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
     val notes = (if (state.pinned.isNotEmpty()) state.pinned else emptyList()) + state.recent
     if (notes.isEmpty() && state.archived.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No notes yet", style = MaterialTheme.typography.bodyLarge)
+            EmptyState(
+                icon = Icons.Outlined.EditNote,
+                title = "No notes yet",
+                actionLabel = "Create note",
+                onAction = { navigator.navigate(Route.Editor(null)) },
+            )
         }
     } else if (notes.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -552,15 +627,31 @@ private fun NoteRowDetailed(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
             }
         },
         supportingContent = {
-            Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            Column {
+                Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    formatDate(note.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         trailingContent = {
-            IconButton(onClick = { vm.togglePinned(note) }) {
-                Icon(
-                    if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                    contentDescription = if (note.isPinned) "Unpin" else "Pin",
-                    tint = if (note.isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                )
+            Row {
+                IconButton(onClick = { vm.toggleFavorite(note) }) {
+                    Icon(
+                        if (note.favorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        contentDescription = if (note.favorite) "Unfavorite" else "Favorite",
+                        tint = if (note.favorite) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
+                IconButton(onClick = { vm.togglePinned(note) }) {
+                    Icon(
+                        if (note.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = if (note.isPinned) "Unpin" else "Pin",
+                        tint = if (note.isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
             }
         },
     )
@@ -668,17 +759,30 @@ private fun FolderChipRow(state: HomeViewModel.UiState, vm: HomeViewModel) {
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        val chipColors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+        )
         FilterChip(
             selected = state.selectedFolderId == null,
             onClick = { vm.selectFolder(null) },
             label = { Text("All") },
+            colors = chipColors,
         )
         state.folders.forEach { folder ->
             FilterChip(
                 selected = state.selectedFolderId == folder.id,
                 onClick = { vm.selectFolder(folder.id) },
                 label = { Text(folder.name) },
+                colors = chipColors,
             )
         }
     }
+}
+
+private fun formatDate(instant: Instant): String {
+    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+    val month = dt.month.name.lowercase().replaceFirstChar { it.uppercase() }
+    return "$month ${dt.dayOfMonth}"
 }

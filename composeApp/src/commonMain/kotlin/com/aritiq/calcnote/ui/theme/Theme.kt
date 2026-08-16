@@ -1,6 +1,7 @@
 package com.aritiq.calcnote.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -14,9 +15,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.aritiq.calcnote.composeapp.generated.resources.*
+import org.jetbrains.compose.resources.Font
 
 /**
- * CalcNote paper-themed Material 3 theme.
+ * Aritiq paper-themed Material 3 theme.
  *
  * Light mode: Classic notebook aesthetic
  *   - Cream background with subtle warmth
@@ -30,14 +33,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
  *   - Cream text for comfortable reading
  *   - Adjusted accents for dark backgrounds
  *   - Same font choices, adapted for dark mode
+ *
+ * [accent] swaps the primary/secondary/tertiary color groups while keeping the
+ * paper background/surface identity constant (see [NotebookAccent]).
  */
 @Composable
-fun CalcNoteTheme(
+fun AritiqTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    accent: NotebookAccent = NotebookAccent.TEAL,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) DarkPaperColorScheme else LightPaperColorScheme
-    val typography = PaperTypography
+    val colorScheme = if (darkTheme) accent.dark else accent.light
+    val typography = PaperTypography()
     val shapes = PaperShapes
 
     MaterialTheme(
@@ -61,30 +68,31 @@ val PaperShapes = Shapes(
 // MARK: - Typography
 
 /**
- * Paper-themed typography using system fonts:
- * - Display/Headline: Serif (Playfair Display-like) for titles and headers
- * - Body: Sans-serif (Inter-like) for body text
- * - Label: Sans-serif for UI labels
- * - Editor: Monospace (JetBrains Mono-like) for the editor
+ * Paper-themed typography using bundled fonts:
+ * - Display/Headline: Playfair Display (serif) for titles and headers
+ * - Body: Inter (sans-serif) for body text
+ * - Label: Inter for UI labels
+ * - Editor: JetBrains Mono for the editor
  */
-val PaperTypography = Typography(
+@Composable
+fun PaperTypography(): Typography = Typography(
     // Display styles - Serif for dramatic titles
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Bold,
         fontSize = 57.sp,
         lineHeight = 64.sp,
         letterSpacing = -0.25.sp,
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Bold,
         fontSize = 45.sp,
         lineHeight = 52.sp,
         letterSpacing = 0.sp,
     ),
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Bold,
         fontSize = 36.sp,
         lineHeight = 44.sp,
@@ -93,21 +101,21 @@ val PaperTypography = Typography(
 
     // Headline styles - Serif for section headers
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
         letterSpacing = 0.sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
         letterSpacing = 0.sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
@@ -116,21 +124,21 @@ val PaperTypography = Typography(
 
     // Title styles - Serif for card titles
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Medium,
         fontSize = 22.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Medium,
         fontSize = 18.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.sp,
     ),
     titleSmall = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily(Font(Res.font.PlayfairDisplay)),
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 20.sp,
@@ -139,21 +147,21 @@ val PaperTypography = Typography(
 
     // Body styles - Sans-serif for body text
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.15.sp,
     ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.25.sp,
     ),
     bodySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -162,21 +170,21 @@ val PaperTypography = Typography(
 
     // Label styles - Sans-serif for UI labels
     labelLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp,
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = FontFamily(Font(Res.font.Inter)),
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
@@ -193,7 +201,7 @@ val PaperTypography = Typography(
 @Composable
 fun editorTextStyle(): TextStyle {
     return TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily(Font(Res.font.JetBrainsMono)),
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -314,6 +322,93 @@ private val DarkPaperColorScheme = darkColorScheme(
     // Surface tint
     surfaceTint = Color(0xFF80CBC4),
 )
+
+/**
+ * Notebook cover accent palettes. Each swaps the primary/secondary/tertiary color
+ * groups; background/surface/typography stay the shared paper identity.
+ * Persisted via the settings table ("accent" key).
+ */
+enum class NotebookAccent(val label: String) {
+    TEAL("Teal"),
+    ORANGE("Orange"),
+    PURPLE("Purple");
+
+    companion object {
+        fun fromString(value: String): NotebookAccent = entries.firstOrNull { it.name == value } ?: TEAL
+    }
+}
+
+/** Light-mode scheme for an accent. */
+val NotebookAccent.light: ColorScheme
+    get() = when (this) {
+        NotebookAccent.TEAL -> LightPaperColorScheme
+        NotebookAccent.ORANGE -> LightPaperColorScheme.copy(
+            primary = Color(0xFFE65100),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFFFE0B2),
+            onPrimaryContainer = Color(0xFF3E2723),
+            secondary = Color(0xFF00695C),
+            onSecondary = Color.White,
+            secondaryContainer = Color(0xFFB2DFDB),
+            onSecondaryContainer = Color(0xFF00201E),
+            tertiary = Color(0xFF6A1B9A),
+            onTertiary = Color.White,
+            tertiaryContainer = Color(0xFFE1BEE7),
+            onTertiaryContainer = Color(0xFF311B92),
+            surfaceTint = Color(0xFFE65100),
+        )
+        NotebookAccent.PURPLE -> LightPaperColorScheme.copy(
+            primary = Color(0xFF6A1B9A),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFE1BEE7),
+            onPrimaryContainer = Color(0xFF311B92),
+            secondary = Color(0xFF00695C),
+            onSecondary = Color.White,
+            secondaryContainer = Color(0xFFB2DFDB),
+            onSecondaryContainer = Color(0xFF00201E),
+            tertiary = Color(0xFFE65100),
+            onTertiary = Color.White,
+            tertiaryContainer = Color(0xFFFFE0B2),
+            onTertiaryContainer = Color(0xFF3E2723),
+            surfaceTint = Color(0xFF6A1B9A),
+        )
+    }
+
+/** Dark-mode scheme for an accent. */
+val NotebookAccent.dark: ColorScheme
+    get() = when (this) {
+        NotebookAccent.TEAL -> DarkPaperColorScheme
+        NotebookAccent.ORANGE -> DarkPaperColorScheme.copy(
+            primary = Color(0xFFFFB74D),
+            onPrimary = Color(0xFF3E2723),
+            primaryContainer = Color(0xFFE65100),
+            onPrimaryContainer = Color(0xFFFFE0B2),
+            secondary = Color(0xFF80CBC4),
+            onSecondary = Color(0xFF00201E),
+            secondaryContainer = Color(0xFF004D40),
+            onSecondaryContainer = Color(0xFFB2DFDB),
+            tertiary = Color(0xFFCE93D8),
+            onTertiary = Color(0xFF311B92),
+            tertiaryContainer = Color(0xFF4A148C),
+            onTertiaryContainer = Color(0xFFE1BEE7),
+            surfaceTint = Color(0xFFFFB74D),
+        )
+        NotebookAccent.PURPLE -> DarkPaperColorScheme.copy(
+            primary = Color(0xFFCE93D8),
+            onPrimary = Color(0xFF311B92),
+            primaryContainer = Color(0xFF4A148C),
+            onPrimaryContainer = Color(0xFFE1BEE7),
+            secondary = Color(0xFF80CBC4),
+            onSecondary = Color(0xFF00201E),
+            secondaryContainer = Color(0xFF004D40),
+            onSecondaryContainer = Color(0xFFB2DFDB),
+            tertiary = Color(0xFFFFB74D),
+            onTertiary = Color(0xFF3E2723),
+            tertiaryContainer = Color(0xFFE65100),
+            onTertiaryContainer = Color(0xFFFFE0B2),
+            surfaceTint = Color(0xFFCE93D8),
+        )
+    }
 
 /**
  * Access the paper color scheme from anywhere in the compose tree.

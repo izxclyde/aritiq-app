@@ -1,6 +1,7 @@
 package com.aritiq.calcnote.lock
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
@@ -17,8 +18,15 @@ class AndroidLockManager(private val context: Context) : LockManager {
 
     override fun isAvailable(): Boolean {
         val bm = BiometricManager.from(context)
-        return bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+        return bm.canAuthenticate(authenticators()) == BiometricManager.BIOMETRIC_SUCCESS
     }
+
+    private fun authenticators() =
+        if (Build.VERSION.SDK_INT >= 30) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        }
 
     override suspend fun authenticate(activity: Any): Boolean = suspendCancellableCoroutine { cont ->
         val fa = activity as? FragmentActivity
@@ -40,19 +48,18 @@ class AndroidLockManager(private val context: Context) : LockManager {
                     if (cont.isActive) cont.resume(false)
                 }
                 override fun onAuthenticationFailed() {
-                    executor.shutdown()
-                    if (cont.isActive) cont.resume(false)
+                    // Biometric read failed to match — keep the prompt open so the user can retry.
                 }
             },
         )
-        prompt.authenticate(
-            BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock Locked Folder")
-                .setSubtitle("Authenticate to view locked notes")
-                .setNegativeButtonText("Cancel")
-                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                .build(),
-        )
+        val builder = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Locked Folder")
+            .setSubtitle("Authenticate to view locked notes")
+            .setAllowedAuthenticators(authenticators())
+        if (Build.VERSION.SDK_INT < 30) {
+            builder.setNegativeButtonText("Cancel")
+        }
+        prompt.authenticate(builder.build())
         cont.invokeOnCancellation { executor.shutdown() }
     }
 

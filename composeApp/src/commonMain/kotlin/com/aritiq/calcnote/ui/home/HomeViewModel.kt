@@ -8,6 +8,7 @@ import com.aritiq.calcnote.data.repository.SettingsRepository
 import com.aritiq.calcnote.domain.Folder
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
+import com.aritiq.calcnote.lock.LockManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,6 +27,7 @@ class HomeViewModel(
     private val settingsRepo: SettingsRepository,
     private val exportService: ExportService,
     private val folderRepo: FolderRepository,
+    private val lockManager: LockManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
@@ -128,6 +130,13 @@ class HomeViewModel(
         }
     }
 
+    fun toggleFavorite(note: Note) {
+        scope.launch {
+            repo.setFavorite(note.id, !note.favorite)
+            reload()
+        }
+    }
+
     fun archive(note: Note) {
         scope.launch {
             repo.setArchived(note.id, true)
@@ -156,6 +165,7 @@ class HomeViewModel(
     fun titleOf(content: String): String = NoteProcessor.titleOf(content)
 
     fun moveToLocked(noteIds: Set<String>) {
+        if (!lockManager.isAvailable()) return
         scope.launch {
             val now = Clock.System.now()
             for (id in noteIds) {
@@ -197,8 +207,13 @@ class HomeViewModel(
     }
 
     fun selectAll() {
-        val all = _state.value.recent.map { it.id }.toSet() +
-            _state.value.pinned.map { it.id }
+        val q = _state.value.query
+        val all = if (q.isNotBlank()) {
+            _state.value.searchResults.map { it.id }.toSet()
+        } else {
+            _state.value.recent.map { it.id }.toSet() +
+                _state.value.pinned.map { it.id }
+        }
         _state.value = _state.value.copy(selectedIds = all)
     }
 
