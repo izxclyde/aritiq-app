@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -123,7 +125,7 @@ private fun LockedNoteRow(note: Note, onOpen: () -> Unit, onUnlock: () -> Unit) 
             modifier = Modifier.weight(1f).clickable { onOpen() }.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.fillMaxWidth()) {
                 Text(

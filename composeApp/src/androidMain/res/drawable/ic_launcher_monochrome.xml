@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome variant for Android 13+ themed launcher icons (single silhouette). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,20 h28 a8,8 0 0 1 8,8 v52 a8,8 0 0 1 -8,8 h-28 a8,8 0 0 1 -8,-8 v-52 a8,8 0 0 1 8,-8 z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:pathData="M47,28 L47,80" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M58,42 H72 L58,55 H72" />
+</vector>

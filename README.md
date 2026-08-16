@@ -163,6 +163,7 @@ Locked notes are **completely isolated** — excluded from search, recent list, 
 - **Stack-based Navigator**: Replaced depth counter with `mutableListOf` stack for real back-stack.
 - **Manage Folders**: Locked folder shown non-interactive with padlock icon (no rename, no delete).
 - **No encryption-at-rest**: Visibility gating only. Encryption is a future enhancement.
+- **Future — Device credential fallback**: Change `BIOMETRIC_STRONG` → `BIOMETRIC_STRONG or DEVICE_CREDENTIAL` so users without biometrics (or after biometric failure) can fall back to their device PIN/pattern/password. Minimal change — one authenticator flag.
 
 ---
 
@@ -215,6 +216,7 @@ Items from the original spec and future enhancements that are not yet scheduled:
 - Markdown rendering in editor
 - Keyboard shortcuts (tablets / foldables)
 - Local encryption (PIN / biometric with encrypted storage)
+- Device credential fallback for biometric unlock (`BIOMETRIC_STRONG or DEVICE_CREDENTIAL`)
 - Plugin-ready calculator engine (engine already cleanly separated)
 - iOS target (add `iosMain` + platform driver)
 

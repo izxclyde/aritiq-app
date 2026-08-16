@@ -5,12 +5,13 @@
       Compose Material3 takes over rendering once MainActivity's setContent block runs;
       this XML theme only paints the splash window before Compose attaches.
     -->
-    <style name="Theme.CalcNote" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.Aritiq" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/cream_paper</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 
-    <style name="Theme.CalcNote.Splash" parent="Theme.CalcNote" />
+    <!-- Splash-entry theme (windowBackground only pre-31; splash screen API on 31+). -->
+    <style name="Theme.Aritiq.Starting" parent="Theme.Aritiq" />
 
     <!-- Paper cream color for splash screen -->
     <color name="cream_paper">#FAF9F6</color>

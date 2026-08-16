@@ -33,7 +33,7 @@ fun appModule(context: Context): Module = module {
     single { ExportService(get(), get()) }
     single { ImportService(get(), get()) }
 
-    factory { HomeViewModel(get(), get(), get(), get()) }
+    factory { HomeViewModel(get(), get(), get(), get(), get()) }
     factory { EditorViewModel(get(), get(), get()) }
     factory { ManageFoldersViewModel(get()) }
     single { SettingsViewModel(get(), get(), get()) }

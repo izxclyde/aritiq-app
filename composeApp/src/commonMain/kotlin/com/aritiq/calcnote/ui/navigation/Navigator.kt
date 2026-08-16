@@ -13,7 +13,6 @@ sealed class Route {
     data object Home : Route()
     data class Editor(val noteId: String?) : Route()
     data object Settings : Route()
-    data object About : Route()
     data object ManageFolders : Route()
     data object LockedFolder : Route()
 }

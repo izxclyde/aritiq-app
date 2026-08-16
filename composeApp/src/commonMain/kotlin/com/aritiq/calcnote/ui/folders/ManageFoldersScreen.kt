@@ -10,7 +10,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.domain.Folder
+import com.aritiq.calcnote.ui.components.EmptyState
 import com.aritiq.calcnote.ui.navigation.Navigator
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -45,14 +47,23 @@ fun ManageFoldersScreen(navigator: Navigator) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
+            FloatingActionButton(
+                onClick = { showCreateDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Create folder")
             }
         },
     ) { padding ->
         if (state.folders.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No folders yet", style = MaterialTheme.typography.bodyLarge)
+                EmptyState(
+                    icon = Icons.Outlined.CreateNewFolder,
+                    title = "No folders yet",
+                    actionLabel = "Create folder",
+                    onAction = { showCreateDialog = true },
+                )
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -61,7 +72,7 @@ fun ManageFoldersScreen(navigator: Navigator) {
                         item(key = folder.id) {
                             ListItem(
                                 headlineContent = { Text(folder.name) },
-                                leadingContent = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                                leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
                                 colors = ListItemDefaults.colors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                                 ),

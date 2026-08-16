@@ -4,24 +4,32 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.ui.text.AnnotatedString
 import com.aritiq.calcnote.appVersion
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.ui.navigation.Navigator
+import com.aritiq.calcnote.ui.theme.NotebookAccent
+import com.aritiq.calcnote.ui.theme.dark
+import com.aritiq.calcnote.ui.theme.light
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -29,7 +37,7 @@ import org.koin.compose.koinInject
 @Composable
 fun SettingsScreen(navigator: Navigator) {
     BackHandler { navigator.pop() }
-    val vm = koinInject<SettingsViewModel>().also { it.load() }
+    val vm = koinInject<SettingsViewModel>()
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -85,6 +93,42 @@ fun SettingsScreen(navigator: Navigator) {
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+            Text("Accent", style = MaterialTheme.typography.titleSmall)
+            val isDark = when (state.themeMode) {
+                SettingsViewModel.ThemeMode.System -> isSystemInDarkTheme()
+                SettingsViewModel.ThemeMode.Light -> false
+                SettingsViewModel.ThemeMode.Dark -> true
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                NotebookAccent.entries.forEach { accent ->
+                    val selected = state.accent == accent
+                    val accentScheme = if (isDark) accent.dark else accent.light
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(accentScheme.primary)
+                            .border(
+                                width = if (selected) 3.dp else 1.dp,
+                                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                                shape = CircleShape,
+                            )
+                            .clickable { vm.setAccent(accent) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = accentScheme.onPrimary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
@@ -118,14 +162,14 @@ fun SettingsScreen(navigator: Navigator) {
             Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
             Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
-            ClickableText(
-                text = AnnotatedString("Website: www.hcnatividad.com"),
+            Text(
+                "Website: www.hcnatividad.com",
                 style = MaterialTheme.typography.bodyMedium,
-                onClick = {
+                modifier = Modifier.clickable {
                     val intent =
                         Intent(Intent.ACTION_VIEW, Uri.parse("https://www.hcnatividad.com"))
                     context.startActivity(intent)
-                }
+                },
             )
             Spacer(Modifier.height(15.dp))
             HorizontalDivider()

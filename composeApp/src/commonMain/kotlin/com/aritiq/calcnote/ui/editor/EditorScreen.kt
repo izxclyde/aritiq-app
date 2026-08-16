@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
@@ -31,7 +32,6 @@ import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.NoteProcessor
 import com.aritiq.calcnote.ui.navigation.Navigator
-import com.aritiq.calcnote.ui.theme.PaperGrainOverlay
 import com.aritiq.calcnote.ui.theme.editorTextStyle
 import com.aritiq.calcnote.ui.theme.paperColorScheme
 import kotlinx.coroutines.launch
@@ -129,12 +129,18 @@ fun EditorScreen(
                         }
                         DropdownMenu(expanded = showFolderMenu, onDismissRequest = { showFolderMenu = false }) {
                             DropdownMenuItem(
-                                text = { Text(if (state.folderId == null) "No folder ✓" else "No folder") },
+                                text = { Text("No folder") },
+                                trailingIcon = if (state.folderId == null) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else null,
                                 onClick = { vm.setFolderId(null); showFolderMenu = false },
                             )
                             state.folders.forEach { folder ->
                                 DropdownMenuItem(
-                                    text = { Text(if (state.folderId == folder.id) "${folder.name} ✓" else folder.name) },
+                                    text = { Text(folder.name) },
+                                    trailingIcon = if (state.folderId == folder.id) {
+                                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                    } else null,
                                     onClick = { vm.setFolderId(folder.id); showFolderMenu = false },
                                 )
                             }
@@ -232,7 +238,6 @@ fun EditorScreen(
                         }
                     }
                 }
-                PaperGrainOverlay(modifier = Modifier.fillMaxSize())
             }
         }
     }
