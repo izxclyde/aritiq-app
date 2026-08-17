@@ -93,6 +93,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (System.getenv("ARITIQ_KEYSTORE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
