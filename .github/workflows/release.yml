@@ -1,0 +1,30 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: [self-hosted, aritiq]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version code
+        id: version
+        run: echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        run: |
+          ./gradlew :composeApp:assembleRelease \
+            -Pandroid.versionCodeOverride=${{ steps.version.outputs.code }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0-${{ steps.version.outputs.code }}
+          files: composeApp/build/outputs/apk/release/*.apk
+          generate_release_notes: true

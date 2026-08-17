@@ -1,0 +1,45 @@
+# Self-hosted GitHub Actions runner for Aritiq (Android build).
+# Copy this service into your existing docker-compose stack on the Docker host,
+# and add the .env entries below. The image bakes in JDK 17 + Android SDK,
+# so the Android SDK persists across container restarts.
+#
+# .env additions:
+#   REPO_URL_ARITIQ=https://github.com/izxclyde/aritiq-app
+#   ARITIQ_KEYSTORE_PASSWORD=...   (from keytool step below)
+#   ARITIQ_KEY_PASSWORD=...
+#
+# One-time keystore generation (on the Docker host, back it up!):
+#   keytool -genkeypair -keystore release.keystore -alias aritiq \
+#     -keyalg RSA -keysize 2048 -validity 10000
+#   mkdir -p D:/Docker/keystore && cp release.keystore D:/Docker/keystore/
+#
+# Losing the keystore means every installed user must uninstall before updating.
+
+services:
+  github-runner-aritiq:
+    image: compscidr/github-runner-android:jdk17
+    container_name: github-runner-aritiq
+    restart: unless-stopped
+    environment:
+      - RUNNER_ALLOW_RUNASROOT=1
+      - RUNNER_SCOPE=repo
+      - REPO_URL=${REPO_URL_ARITIQ:?error}
+      - ACCESS_TOKEN=${REPO_TOKEN}
+      - RUNNER_NAME=aritiq-runner
+      - RUNNER_NAME_PREFIX=github-runner
+      - RUNNER_GROUP=default
+      - LABELS=self-hosted,aritiq,linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - ARITIQ_KEYSTORE=/mnt/keystore/release.keystore
+      - ARITIQ_KEYSTORE_PASSWORD=${ARITIQ_KEYSTORE_PASSWORD}
+      - ARITIQ_KEY_ALIAS=aritiq
+      - ARITIQ_KEY_PASSWORD=${ARITIQ_KEY_PASSWORD}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - D:/Docker/keystore:/mnt/keystore:ro
+      - runner-data-aritiq:/home/runner/actions-runner
+    networks:
+      - gtrunner-network
+
+volumes:
+  runner-data-aritiq:
