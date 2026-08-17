@@ -79,7 +79,7 @@ android {
         applicationId = "com.aritiq.calcnote"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
+        versionCode = (project.findProperty("android.versionCodeOverride") as String?)?.toIntOrNull() ?: 1
         versionName = "0.1.0"
     }
 
