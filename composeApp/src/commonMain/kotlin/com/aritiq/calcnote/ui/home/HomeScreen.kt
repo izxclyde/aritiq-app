@@ -99,13 +99,17 @@ fun HomeScreen(navigator: Navigator) {
                                 val json = vm.exportSelectedJson()
                                 if (json != null) {
                                     val keyHex = settingsRepo.get("export_key")
+                                    val saltHex = settingsRepo.get("export_key_salt")
                                     val key = if (!keyHex.isNullOrBlank()) {
-                                        keyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                                        com.aritiq.calcnote.data.export.decodeHex(keyHex)
                                     } else null
-                                    val encrypted = if (key != null) {
-                                        encryptionService.encryptWithKey(json, key)
-                                    } else {
-                                        encryptionService.encrypt(json, "4r1t1q-4pp")
+                                    val salt = if (!saltHex.isNullOrBlank()) {
+                                        com.aritiq.calcnote.data.export.decodeHex(saltHex)
+                                    } else null
+                                    val encrypted = when {
+                                        key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
+                                        key != null -> encryptionService.encryptWithKey(json, key)
+                                        else -> encryptionService.encrypt(json, "4r1t1q-4pp")
                                     }
                                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
                                     val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)

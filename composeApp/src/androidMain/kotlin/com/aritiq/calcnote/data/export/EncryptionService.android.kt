@@ -42,6 +42,10 @@ actual fun decryptImpl(ciphertext: ByteArray, password: String): String {
 
 actual fun encryptWithKeyImpl(plaintext: String, key: ByteArray): ByteArray {
     val salt = ByteArray(SALT_SIZE).also { SecureRandom().nextBytes(it) }
+    return encryptWithKeyAndSaltImpl(plaintext, key, salt)
+}
+
+actual fun encryptWithKeyAndSaltImpl(plaintext: String, key: ByteArray, salt: ByteArray): ByteArray {
     val iv = ByteArray(IV_SIZE).also { SecureRandom().nextBytes(it) }
     val aesKey = SecretKeySpec(key, "AES")
 

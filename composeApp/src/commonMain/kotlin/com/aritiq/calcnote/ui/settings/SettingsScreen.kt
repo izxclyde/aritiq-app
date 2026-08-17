@@ -45,7 +45,7 @@ private const val DEFAULT_PASSWORD = "4r1t1q-4pp"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navigator: Navigator) {
+fun SettingsScreen(navigator: Navigator) {  
     BackHandler { navigator.pop() }
     val vm = koinInject<SettingsViewModel>()
     val state by vm.state.collectAsState()
@@ -60,6 +60,23 @@ fun SettingsScreen(navigator: Navigator) {
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf<String?>(null) }
 
+    // Import password prompt
+    var showImportPasswordDialog by remember { mutableStateOf(false) }
+    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var importPasswordError by remember { mutableStateOf<String?>(null) }
+
+    fun handleDecryptedContent(content: String?) {
+        if (content == null) {
+            importPasswordError = null
+            showImportPasswordDialog = true
+        } else if (content.isBlank()) {
+            vm.importResult("File is empty")
+        } else {
+            importContent = content
+            showImportDialog = true
+        }
+    }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -71,21 +88,34 @@ fun SettingsScreen(navigator: Navigator) {
                         vm.importResult("File is empty")
                         return@launch
                     }
-                    importContent = if (encryptionService.isEncrypted(bytes)) {
+                    val content = if (encryptionService.isEncrypted(bytes)) {
                         val key = vm.getExportKey()
-                        if (key != null) {
-                            encryptionService.decryptWithKey(bytes, key)
+                        val byKey = try {
+                            if (key != null) {
+                                encryptionService.decryptWithKey(bytes, key)
+                            } else {
+                                null
+                            }
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (byKey != null) {
+                            byKey
                         } else {
-                            encryptionService.decrypt(bytes, DEFAULT_PASSWORD)
+                            val byDefault = try {
+                                encryptionService.decrypt(bytes, DEFAULT_PASSWORD)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (byDefault != null) byDefault else {
+                                pendingImportBytes = bytes
+                                null
+                            }
                         }
                     } else {
                         String(bytes, Charsets.UTF_8)
                     }
-                    if (importContent.isBlank()) {
-                        vm.importResult("File is empty")
-                    } else {
-                        showImportDialog = true
-                    }
+                    handleDecryptedContent(content)
                 } catch (e: Exception) {
                     vm.importResult("Error reading file: ${e.message}")
                 }
@@ -189,10 +219,11 @@ fun SettingsScreen(navigator: Navigator) {
                     scope.launch {
                         val json = vm.exportAllJson()
                         val key = vm.getExportKey()
-                        val encrypted = if (key != null) {
-                            encryptionService.encryptWithKey(json, key)
-                        } else {
-                            encryptionService.encrypt(json, DEFAULT_PASSWORD)
+                        val salt = vm.getExportSalt()
+                        val encrypted = when {
+                            key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
+                            key != null -> encryptionService.encryptWithKey(json, key)
+                            else -> encryptionService.encrypt(json, DEFAULT_PASSWORD)
                         }
                         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
                         val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
@@ -308,6 +339,82 @@ fun SettingsScreen(navigator: Navigator) {
             error = passwordError,
         )
     }
+
+    // Import password dialog (stored key/default didn't match)
+    if (showImportPasswordDialog) {
+        ImportPasswordDialog(
+            error = importPasswordError,
+            onConfirm = { password ->
+                val bytes = pendingImportBytes
+                if (bytes != null) {
+                    val decrypted = try {
+                        encryptionService.decrypt(bytes, password)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (decrypted != null) {
+                        pendingImportBytes = null
+                        showImportPasswordDialog = false
+                        importPasswordError = null
+                        handleDecryptedContent(decrypted)
+                    } else {
+                        importPasswordError = "Wrong password"
+                    }
+                }
+            },
+            onDismiss = {
+                pendingImportBytes = null
+                showImportPasswordDialog = false
+                importPasswordError = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ImportPasswordDialog(
+    error: String?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter export password") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = password.isNotBlank(), onClick = { onConfirm(password) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
