@@ -12,5 +12,8 @@ composeApp/build/
 # Local machine config
 local.properties
 
+# Signing keystore & credentials (never commit)
+keystore/
+
 # Generated analysis
 graphify-out/
