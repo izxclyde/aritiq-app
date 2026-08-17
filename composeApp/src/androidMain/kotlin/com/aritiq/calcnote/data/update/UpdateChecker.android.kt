@@ -31,7 +31,8 @@ actual fun checkForUpdate(): UpdateInfo? {
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.setRequestProperty("User-Agent", "aritiq-app")
             if (conn.responseCode != 200) return null
-            val release = Json.decodeFromString<Release>(conn.inputStream.bufferedReader().use { it.readText() })
+            val release = Json { ignoreUnknownKeys = true }
+                .decodeFromString<Release>(conn.inputStream.bufferedReader().use { it.readText() })
             val versionCode = release.tag_name.substringAfterLast('-').toIntOrNull() ?: return null
             val apkUrl = release.assets.firstOrNull { it.browser_download_url.endsWith(".apk") }?.browser_download_url
                 ?: return null
