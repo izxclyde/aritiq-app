@@ -68,6 +68,13 @@ android {
     namespace = "com.aritiq.calcnote"
     compileSdk = 36
 
+    applicationVariants.all {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "Aritiq-${versionName}-${buildType.name}.apk"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.aritiq.calcnote"
         minSdk = 24
