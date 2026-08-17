@@ -14,16 +14,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import com.aritiq.calcnote.appVersion
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.ui.navigation.Navigator
@@ -31,18 +36,46 @@ import com.aritiq.calcnote.ui.theme.NotebookAccent
 import com.aritiq.calcnote.ui.theme.dark
 import com.aritiq.calcnote.ui.theme.light
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
+
+private const val DEFAULT_PASSWORD = "4r1t1q-4pp"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navigator: Navigator) {
+fun SettingsScreen(navigator: Navigator) {  
     BackHandler { navigator.pop() }
     val vm = koinInject<SettingsViewModel>()
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val encryptionService = remember { EncryptionService() }
     var showImportDialog by remember { mutableStateOf(false) }
     var importContent by remember { mutableStateOf("") }
+
+    // Password dialogs
+    var showSetPasswordDialog by remember { mutableStateOf(false) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    // Import password prompt
+    var showImportPasswordDialog by remember { mutableStateOf(false) }
+    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var importPasswordError by remember { mutableStateOf<String?>(null) }
+
+    fun handleDecryptedContent(content: String?) {
+        if (content == null) {
+            importPasswordError = null
+            showImportPasswordDialog = true
+        } else if (content.isBlank()) {
+            vm.importResult("File is empty")
+        } else {
+            importContent = content
+            showImportDialog = true
+        }
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -50,20 +83,47 @@ fun SettingsScreen(navigator: Navigator) {
         if (uri != null) {
             scope.launch {
                 try {
-                    val input = context.contentResolver.openInputStream(uri)
-                    importContent = input?.bufferedReader()?.readText() ?: ""
-                    input?.close()
-                    if (importContent.isBlank()) {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes == null || bytes.isEmpty()) {
                         vm.importResult("File is empty")
-                    } else {
-                        showImportDialog = true
+                        return@launch
                     }
+                    val content = if (encryptionService.isEncrypted(bytes)) {
+                        val key = vm.getExportKey()
+                        val byKey = try {
+                            if (key != null) {
+                                encryptionService.decryptWithKey(bytes, key)
+                            } else {
+                                null
+                            }
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (byKey != null) {
+                            byKey
+                        } else {
+                            val byDefault = try {
+                                encryptionService.decrypt(bytes, DEFAULT_PASSWORD)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (byDefault != null) byDefault else {
+                                pendingImportBytes = bytes
+                                null
+                            }
+                        }
+                    } else {
+                        String(bytes, Charsets.UTF_8)
+                    }
+                    handleDecryptedContent(content)
                 } catch (e: Exception) {
                     vm.importResult("Error reading file: ${e.message}")
                 }
             }
         }
     }
+
+    LaunchedEffect(Unit) { vm.load() }
 
     Scaffold(
         topBar = {
@@ -132,20 +192,53 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
+            Text("Export Password", style = MaterialTheme.typography.titleSmall)
+            if (state.passwordSet) {
+                Text("Password is set", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { showChangePasswordDialog = true }) {
+                        Text("Change")
+                    }
+                    OutlinedButton(onClick = { vm.clearExportPassword() }) {
+                        Text("Remove")
+                    }
+                }
+            } else {
+                Text("No password set. Exports use default password.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = { showSetPasswordDialog = true }) {
+                    Text("Set Password")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
             Text("Export", style = MaterialTheme.typography.titleSmall)
             OutlinedButton(
                 onClick = {
-                    scope.launch { shareExport(context, vm.exportAllJson(), "application/json", "aritiq-all.json") }
+                    scope.launch {
+                        val json = vm.exportAllJson()
+                        val key = vm.getExportKey()
+                        val salt = vm.getExportSalt()
+                        val encrypted = when {
+                            key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
+                            key != null -> encryptionService.encryptWithKey(json, key)
+                            else -> encryptionService.encrypt(json, DEFAULT_PASSWORD)
+                        }
+                        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                        val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
+                        shareExport(context, encrypted, "application/octet-stream", "aritiq-export-$ts.aritiq")
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Export All as JSON")
+                Text("Export All")
             }
 
             Spacer(Modifier.height(16.dp))
             Text("Import", style = MaterialTheme.typography.titleSmall)
             OutlinedButton(
-                onClick = { filePickerLauncher.launch(arrayOf("application/json")) },
+                onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Import from file")
@@ -176,8 +269,8 @@ fun SettingsScreen(navigator: Navigator) {
         }
     }
 
+    // Import merge/replace dialog
     var importing by remember { mutableStateOf(false) }
-
     if (showImportDialog && importContent.isNotBlank()) {
         AlertDialog(
             onDismissRequest = { if (!importing) { showImportDialog = false; importContent = "" } },
@@ -197,7 +290,7 @@ fun SettingsScreen(navigator: Navigator) {
                 TextButton(enabled = !importing, onClick = {
                     importing = true
                     scope.launch {
-                        val result = vm.importFromString(importContent, ImportMode.REPLACE)
+                        vm.importFromString(importContent, ImportMode.REPLACE)
                         showImportDialog = false; importContent = ""; importing = false
                     }
                 }) {
@@ -208,7 +301,7 @@ fun SettingsScreen(navigator: Navigator) {
                 TextButton(enabled = !importing, onClick = {
                     importing = true
                     scope.launch {
-                        val result = vm.importFromString(importContent, ImportMode.MERGE)
+                        vm.importFromString(importContent, ImportMode.MERGE)
                         showImportDialog = false; importContent = ""; importing = false
                     }
                 }) {
@@ -217,4 +310,217 @@ fun SettingsScreen(navigator: Navigator) {
             },
         )
     }
+
+    // Set password dialog
+    if (showSetPasswordDialog) {
+        PasswordSetDialog(
+            title = "Set Export Password",
+            onConfirm = { password ->
+                vm.setExportPassword(password)
+                showSetPasswordDialog = false
+            },
+            onDismiss = { showSetPasswordDialog = false },
+        )
+    }
+
+    // Change password dialog
+    if (showChangePasswordDialog) {
+        PasswordChangeDialog(
+            onConfirm = { oldPassword, newPassword ->
+                val success = vm.changeExportPassword(oldPassword, newPassword)
+                if (success) {
+                    showChangePasswordDialog = false
+                    passwordError = null
+                } else {
+                    passwordError = "Wrong password"
+                }
+            },
+            onDismiss = { showChangePasswordDialog = false; passwordError = null },
+            error = passwordError,
+        )
+    }
+
+    // Import password dialog (stored key/default didn't match)
+    if (showImportPasswordDialog) {
+        ImportPasswordDialog(
+            error = importPasswordError,
+            onConfirm = { password ->
+                val bytes = pendingImportBytes
+                if (bytes != null) {
+                    val decrypted = try {
+                        encryptionService.decrypt(bytes, password)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (decrypted != null) {
+                        pendingImportBytes = null
+                        showImportPasswordDialog = false
+                        importPasswordError = null
+                        handleDecryptedContent(decrypted)
+                    } else {
+                        importPasswordError = "Wrong password"
+                    }
+                }
+            },
+            onDismiss = {
+                pendingImportBytes = null
+                showImportPasswordDialog = false
+                importPasswordError = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ImportPasswordDialog(
+    error: String?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter export password") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = password.isNotBlank(), onClick = { onConfirm(password) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun PasswordSetDialog(
+    title: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Icon(
+                            if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            contentDescription = if (showPassword) "Hide password" else "Show password",
+                        )
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(enabled = password.isNotBlank(), onClick = { onConfirm(password) }) {
+                Text("Set")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun PasswordChangeDialog(
+    onConfirm: (oldPassword: String, newPassword: String) -> Unit,
+    onDismiss: () -> Unit,
+    error: String?,
+) {
+    var oldPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var showOld by remember { mutableStateOf(false) }
+    var showNew by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Change Password") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = oldPassword,
+                    onValueChange = { oldPassword = it },
+                    label = { Text("Current password") },
+                    visualTransformation = if (showOld) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showOld = !showOld }) {
+                            Icon(
+                                if (showOld) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("New password") },
+                    visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showNew = !showNew }) {
+                            Icon(
+                                if (showNew) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = oldPassword.isNotBlank() && newPassword.isNotBlank(),
+                onClick = { onConfirm(oldPassword, newPassword) },
+            ) {
+                Text("Change")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }

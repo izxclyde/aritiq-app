@@ -1,8 +1,10 @@
 package com.aritiq.calcnote.ui.settings
 
+import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.ImportService
+import com.aritiq.calcnote.data.export.decodeHex
 import com.aritiq.calcnote.data.repository.SettingsRepository
 import com.aritiq.calcnote.ui.theme.NotebookAccent
 import kotlinx.coroutines.CoroutineScope
@@ -13,10 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * Settings holder: theme mode (System / Light / Dark) + notebook accent.
- * Persisted offline in the local settings table.
- */
 class SettingsViewModel(
     private val repo: SettingsRepository,
     private val exportService: ExportService,
@@ -25,6 +23,7 @@ class SettingsViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+    private val encryptionService = EncryptionService()
 
     fun load() {
         scope.launch {
@@ -32,6 +31,7 @@ class SettingsViewModel(
             _state.value = UiState(
                 themeMode = ThemeMode.fromString(all["theme"] ?: "system"),
                 accent = NotebookAccent.fromString(all["accent"] ?: ""),
+                passwordSet = all.containsKey("export_password_hash"),
             )
         }
     }
@@ -44,6 +44,52 @@ class SettingsViewModel(
     fun setAccent(accent: NotebookAccent) {
         _state.value = _state.value.copy(accent = accent)
         scope.launch { repo.set("accent", accent.name) }
+    }
+
+    fun setExportPassword(password: String) {
+        val hash = encryptionService.hashPassword(password)
+        val salt = encryptionService.generateSalt()
+        val key = encryptionService.deriveKey(password, salt)
+        runBlocking {
+            repo.set("export_password_hash", hash)
+            repo.set("export_key_salt", salt.joinToString("") { "%02x".format(it) })
+            repo.set("export_key", key.joinToString("") { "%02x".format(it) })
+        }
+        _state.value = _state.value.copy(passwordSet = true)
+    }
+
+    fun changeExportPassword(oldPassword: String, newPassword: String): Boolean {
+        val storedHash = runBlocking { repo.get("export_password_hash") } ?: return false
+        if (!encryptionService.verifyPassword(oldPassword, storedHash)) return false
+        setExportPassword(newPassword)
+        return true
+    }
+
+    fun clearExportPassword() {
+        scope.launch {
+            repo.set("export_password_hash", "")
+            repo.set("export_key_salt", "")
+            repo.set("export_key", "")
+        }
+        _state.value = _state.value.copy(passwordSet = false)
+    }
+
+    suspend fun getExportKey(): ByteArray? {
+        val keyHex = repo.get("export_key") ?: return null
+        if (keyHex.isBlank()) return null
+        return decodeHex(keyHex)
+    }
+
+    suspend fun getExportSalt(): ByteArray? {
+        val saltHex = repo.get("export_key_salt") ?: return null
+        if (saltHex.isBlank()) return null
+        return decodeHex(saltHex)
+    }
+
+    suspend fun verifyExportPassword(password: String): Boolean {
+        val hash = repo.get("export_password_hash") ?: return false
+        if (hash.isBlank()) return false
+        return encryptionService.verifyPassword(password, hash)
     }
 
     enum class ThemeMode(val persisted: String) {
@@ -71,5 +117,10 @@ class SettingsViewModel(
         val themeMode: ThemeMode = ThemeMode.System,
         val accent: NotebookAccent = NotebookAccent.TEAL,
         val importResult: String? = null,
+        val passwordSet: Boolean = false,
     )
+}
+
+private fun <T> runBlocking(block: suspend () -> T): T {
+    return kotlinx.coroutines.runBlocking { block() }
 }
