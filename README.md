@@ -1,7 +1,8 @@
 # Aritiq
 
 Offline notes + calculator for Android. Write a list, type `total`, and the sum shows up
-live — paper-notebook style. No accounts, no network, everything stored locally.
+live — paper-notebook style. No accounts, no network for your data — everything stored
+locally. The only network call is the optional in-app update check against GitHub Releases.
 
 ## Stack
 - **Kotlin Multiplatform** (Android-first, single `composeApp` module) — Compose Multiplatform 1.8.2, Kotlin 2.2.20, Gradle 8.14
@@ -84,6 +85,24 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 .\gradlew :composeApp:compileDebugKotlinAndroid :composeApp:testDebugUnitTest :composeApp:assembleDebug
 ```
 Install the debug APK on a device to test the editor UX (keyboard stability, swipe-back save).
+
+## Releases & updates
+
+Aritiq is distributed free as signed APKs via **GitHub Releases** (no Play Store).
+
+- Every push to `main` triggers `.github/workflows/release.yml` on the self-hosted
+  `aritiq` runner (Docker image `compscidr/github-runner-android:jdk17`), which builds a
+  signed release APK, computes `versionCode` from git commit count, and creates a release
+  `v0.1.0-<N>` with the APK attached.
+- **In-app updates**: the app silently checks `releases/latest` on launch and shows a
+  "Check for updates" button in Settings. If a newer `versionCode` exists, it offers to
+  download and install the APK.
+- On Android 8+, installing the update requires "install unknown apps" permission for
+  Aritiq (prompted automatically). Play Protect may show a warning for sideloaded apps —
+  expected; you can dismiss it.
+- Signing: the release keystore lives on the Docker host (`D:/Docker/keystore/release.keystore`)
+  and is mounted into the runner. **Back it up** — losing it forces every installed user to
+  uninstall before updating. Setup details: `infra/github-runner-aritiq.yml`.
 
 ---
 

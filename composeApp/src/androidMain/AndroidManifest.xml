@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Aritiq: fully offline. No INTERNET permission by design. -->
+    <!-- INTERNET: only used for the in-app update check against GitHub Releases. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- REQUEST_INSTALL_PACKAGES: allows installing the downloaded update APK. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".Aritiq"

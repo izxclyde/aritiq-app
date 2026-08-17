@@ -76,6 +76,22 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("ARITIQ_KEYSTORE") ?: "missing.jks")
+            storePassword = System.getenv("ARITIQ_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ARITIQ_KEY_ALIAS")
+            keyPassword = System.getenv("ARITIQ_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

@@ -31,11 +31,16 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.shareExport
+import com.aritiq.calcnote.data.update.UpdateInfo
+import com.aritiq.calcnote.data.update.checkForUpdate
+import com.aritiq.calcnote.ui.components.UpdateAvailableDialog
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.theme.NotebookAccent
 import com.aritiq.calcnote.ui.theme.dark
 import com.aritiq.calcnote.ui.theme.light
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -64,6 +69,10 @@ fun SettingsScreen(navigator: Navigator) {
     var showImportPasswordDialog by remember { mutableStateOf(false) }
     var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
     var importPasswordError by remember { mutableStateOf<String?>(null) }
+
+    // Update check
+    var updateAvailable by remember { mutableStateOf<UpdateInfo?>(null) }
+    var updateStatus by remember { mutableStateOf<String?>(null) }
 
     fun handleDecryptedContent(content: String?) {
         if (content == null) {
@@ -254,6 +263,27 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(8.dp))
             Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
             Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(
+                onClick = {
+                    updateStatus = "Checking..."
+                    scope.launch(Dispatchers.IO) {
+                        val info = checkForUpdate()
+                        withContext(Dispatchers.Main) {
+                            if (info != null) {
+                                updateStatus = null
+                                updateAvailable = info
+                            } else {
+                                updateStatus = "You're up to date"
+                            }
+                        }
+                    }
+                },
+            ) {
+                Text("Check for updates")
+            }
+            updateStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Website: www.hcnatividad.com",
@@ -369,6 +399,8 @@ fun SettingsScreen(navigator: Navigator) {
             },
         )
     }
+
+    UpdateAvailableDialog(update = updateAvailable, onDismiss = { updateAvailable = null })
 }
 
 @Composable

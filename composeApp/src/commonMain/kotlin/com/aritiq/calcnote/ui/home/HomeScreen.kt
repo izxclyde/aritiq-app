@@ -49,13 +49,18 @@ import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
+import com.aritiq.calcnote.data.update.UpdateInfo
+import com.aritiq.calcnote.data.update.checkForUpdate
 import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.lock.LockManager
 import com.aritiq.calcnote.ui.components.EmptyState
+import com.aritiq.calcnote.ui.components.UpdateAvailableDialog
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -79,6 +84,12 @@ fun HomeScreen(navigator: Navigator) {
 
     var showViewMenu by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
+    var updateAvailable by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    LaunchedEffect(Unit) {
+        val info = withContext(Dispatchers.IO) { checkForUpdate() }
+        if (info != null) updateAvailable = info
+    }
 
     Scaffold(
         topBar = {
@@ -240,6 +251,8 @@ fun HomeScreen(navigator: Navigator) {
             },
         )
     }
+
+    UpdateAvailableDialog(update = updateAvailable, onDismiss = { updateAvailable = null })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
