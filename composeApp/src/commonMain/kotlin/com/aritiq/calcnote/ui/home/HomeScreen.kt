@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ExportService
-import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.update.UpdateInfo
@@ -55,13 +54,14 @@ import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.lock.LockManager
 import com.aritiq.calcnote.ui.components.EmptyState
 import com.aritiq.calcnote.ui.components.UpdateAvailableDialog
+import com.aritiq.calcnote.ui.components.rememberExportWithPassword
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
+import com.aritiq.calcnote.ui.settings.SettingsViewModel
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -79,6 +79,12 @@ fun HomeScreen(navigator: Navigator) {
     val vm = remember { HomeViewModel(repo, settingsRepo, exportService, folderRepo, lockManager) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val exportWithPassword = rememberExportWithPassword(
+        settingsViewModel = koinInject<SettingsViewModel>(),
+        encryptionService = encryptionService,
+        context = context,
+        getJson = { vm.exportSelectedJson() },
+    )
     LaunchedEffect(Unit) { vm.load() }
     val state by vm.state.collectAsState()
 
@@ -105,29 +111,7 @@ fun HomeScreen(navigator: Navigator) {
                         IconButton(onClick = { vm.selectAll() }) {
                             Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
                         }
-                        IconButton(onClick = {
-                            scope.launch {
-                                val json = vm.exportSelectedJson()
-                                if (json != null) {
-                                    val keyHex = settingsRepo.get("export_key")
-                                    val saltHex = settingsRepo.get("export_key_salt")
-                                    val key = if (!keyHex.isNullOrBlank()) {
-                                        com.aritiq.calcnote.data.export.decodeHex(keyHex)
-                                    } else null
-                                    val salt = if (!saltHex.isNullOrBlank()) {
-                                        com.aritiq.calcnote.data.export.decodeHex(saltHex)
-                                    } else null
-                                    val encrypted = when {
-                                        key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
-                                        key != null -> encryptionService.encryptWithKey(json, key)
-                                        else -> encryptionService.encrypt(json, "4r1t1q-4pp")
-                                    }
-                                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-                                    val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
-                                    shareExport(context, encrypted, "application/octet-stream", "aritiq-export-$ts.aritiq")
-                                }
-                            }
-                        }) {
+                        IconButton(onClick = { exportWithPassword() }) {
                             Icon(Icons.Filled.Share, contentDescription = "Export selected")
                         }
                         if (lockManager.isAvailable()) {

@@ -90,4 +90,27 @@ class ImportServiceTest {
         assertEquals(0, result.imported)
         assertTrue(result.errors.isNotEmpty())
     }
+
+    @Test fun import_json_restores_locked_note() = runTest {
+        val repo = InMemoryNoteRepo()
+        val json = """{"version":1,"exportedAt":1000,"notes":[{"id":"sec","title":"Secret","content":"pin 1234","createdAt":1000,"updatedAt":1000,"folderId":"__locked__"}]}"""
+        val svc = ImportService(repo, InMemoryFolderRepo())
+        val result = svc.importJson(json, ImportMode.MERGE)
+        assertEquals(1, result.imported)
+        assertEquals(0, result.skipped)
+        assertEquals("__locked__", repo.getById("sec")?.folderId)
+    }
+
+    @Test fun import_json_replace_keeps_locked_note() = runTest {
+        val repo = InMemoryNoteRepo()
+        val now = kotlinx.datetime.Clock.System.now()
+        repo.seed(com.aritiq.calcnote.domain.Note(id = "oldLocked", title = "Old", content = "keep", createdAt = now, updatedAt = now, folderId = "__locked__"))
+
+        val json = """{"version":1,"exportedAt":2000,"notes":[{"id":"new1","title":"New","content":"hello","createdAt":2000,"updatedAt":2000}]}"""
+        val svc = ImportService(repo, InMemoryFolderRepo())
+        val result = svc.importJson(json, ImportMode.REPLACE)
+        assertEquals(1, result.imported)
+        assertEquals("keep", repo.getById("oldLocked")?.content)
+        assertEquals("New", repo.getById("new1")?.title)
+    }
 }
