@@ -14,7 +14,6 @@ class ExportService(
 
     suspend fun exportAllJson(): String {
         val notes = repo.all()
-            .filter { it.folderId != LOCKED_FOLDER_ID }
             .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
         val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             .map { FolderExport.fromDomain(it) }
@@ -28,16 +27,13 @@ class ExportService(
 
     suspend fun exportAllCsv(): String = buildCsv(repo.all().filter { it.folderId != LOCKED_FOLDER_ID })
 
-    suspend fun exportNoteJson(noteId: String): String {
-        val note = repo.getById(noteId) ?: return "{}"
-        if (note.folderId == LOCKED_FOLDER_ID) return "{}"
-        val export = NoteExport.fromDomain(note, repo.tagsForNote(note.id))
-        return json.encodeToString(NoteExport.serializer(), export)
+    suspend fun exportNoteJson(noteId: String): String? {
+        val note = repo.getById(noteId) ?: return null
+        return json.encodeToString(NoteExport.serializer(), NoteExport.fromDomain(note, repo.tagsForNote(note.id)))
     }
 
     suspend fun exportSelectedJson(noteIds: List<String>): String {
         val notes = noteIds.mapNotNull { repo.getById(it) }
-            .filter { it.folderId != LOCKED_FOLDER_ID }
             .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
         val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             .map { FolderExport.fromDomain(it) }

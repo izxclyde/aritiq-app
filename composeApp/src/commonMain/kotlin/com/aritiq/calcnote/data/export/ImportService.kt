@@ -65,7 +65,6 @@ class ImportService(
 
         for (noteExport in envelope.notes) {
             try {
-                if (noteExport.folderId == LOCKED_FOLDER_ID) { skipped++; continue }
                 if (mode == ImportMode.MERGE && noteExport.id in existingNoteIds) {
                     skipped++
                     continue

@@ -4,7 +4,6 @@ import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ExportService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.export.ImportService
-import com.aritiq.calcnote.data.export.decodeHex
 import com.aritiq.calcnote.data.repository.SettingsRepository
 import com.aritiq.calcnote.ui.theme.NotebookAccent
 import kotlinx.coroutines.CoroutineScope
@@ -48,13 +47,7 @@ class SettingsViewModel(
 
     fun setExportPassword(password: String) {
         val hash = encryptionService.hashPassword(password)
-        val salt = encryptionService.generateSalt()
-        val key = encryptionService.deriveKey(password, salt)
-        runBlocking {
-            repo.set("export_password_hash", hash)
-            repo.set("export_key_salt", salt.joinToString("") { "%02x".format(it) })
-            repo.set("export_key", key.joinToString("") { "%02x".format(it) })
-        }
+        runBlocking { repo.set("export_password_hash", hash) }
         _state.value = _state.value.copy(passwordSet = true)
     }
 
@@ -66,25 +59,12 @@ class SettingsViewModel(
     }
 
     fun clearExportPassword() {
-        scope.launch {
-            repo.set("export_password_hash", "")
-            repo.set("export_key_salt", "")
-            repo.set("export_key", "")
-        }
+        scope.launch { repo.set("export_password_hash", "") }
         _state.value = _state.value.copy(passwordSet = false)
     }
 
-    suspend fun getExportKey(): ByteArray? {
-        val keyHex = repo.get("export_key") ?: return null
-        if (keyHex.isBlank()) return null
-        return decodeHex(keyHex)
-    }
-
-    suspend fun getExportSalt(): ByteArray? {
-        val saltHex = repo.get("export_key_salt") ?: return null
-        if (saltHex.isBlank()) return null
-        return decodeHex(saltHex)
-    }
+    suspend fun isPasswordSet(): Boolean =
+        !(repo.get("export_password_hash")?.isBlank() ?: true)
 
     suspend fun verifyExportPassword(password: String): Boolean {
         val hash = repo.get("export_password_hash") ?: return false

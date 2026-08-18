@@ -30,10 +30,11 @@ import com.aritiq.calcnote.appVersion
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ImportMode
-import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.update.UpdateInfo
 import com.aritiq.calcnote.data.update.checkForUpdate
+import com.aritiq.calcnote.ui.components.ExportPasswordDialog
 import com.aritiq.calcnote.ui.components.UpdateAvailableDialog
+import com.aritiq.calcnote.ui.components.rememberExportWithPassword
 import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.theme.NotebookAccent
 import com.aritiq.calcnote.ui.theme.dark
@@ -41,12 +42,7 @@ import com.aritiq.calcnote.ui.theme.light
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
-
-private const val DEFAULT_PASSWORD = "4r1t1q-4pp"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +53,12 @@ fun SettingsScreen(navigator: Navigator) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val encryptionService = remember { EncryptionService() }
+    val exportWithPassword = rememberExportWithPassword(
+        settingsViewModel = vm,
+        encryptionService = encryptionService,
+        context = context,
+        getJson = { vm.exportAllJson() },
+    )
     var showImportDialog by remember { mutableStateOf(false) }
     var importContent by remember { mutableStateOf("") }
 
@@ -76,8 +78,7 @@ fun SettingsScreen(navigator: Navigator) {
 
     fun handleDecryptedContent(content: String?) {
         if (content == null) {
-            importPasswordError = null
-            showImportPasswordDialog = true
+            vm.importResult("Could not decrypt file")
         } else if (content.isBlank()) {
             vm.importResult("File is empty")
         } else {
@@ -97,34 +98,13 @@ fun SettingsScreen(navigator: Navigator) {
                         vm.importResult("File is empty")
                         return@launch
                     }
-                    val content = if (encryptionService.isEncrypted(bytes)) {
-                        val key = vm.getExportKey()
-                        val byKey = try {
-                            if (key != null) {
-                                encryptionService.decryptWithKey(bytes, key)
-                            } else {
-                                null
-                            }
-                        } catch (e: Exception) {
-                            null
-                        }
-                        if (byKey != null) {
-                            byKey
-                        } else {
-                            val byDefault = try {
-                                encryptionService.decrypt(bytes, DEFAULT_PASSWORD)
-                            } catch (e: Exception) {
-                                null
-                            }
-                            if (byDefault != null) byDefault else {
-                                pendingImportBytes = bytes
-                                null
-                            }
-                        }
+                    if (encryptionService.isEncrypted(bytes)) {
+                        pendingImportBytes = bytes
+                        importPasswordError = null
+                        showImportPasswordDialog = true
                     } else {
-                        String(bytes, Charsets.UTF_8)
+                        handleDecryptedContent(String(bytes, Charsets.UTF_8))
                     }
-                    handleDecryptedContent(content)
                 } catch (e: Exception) {
                     vm.importResult("Error reading file: ${e.message}")
                 }
@@ -224,21 +204,7 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(8.dp))
             Text("Export", style = MaterialTheme.typography.titleSmall)
             OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        val json = vm.exportAllJson()
-                        val key = vm.getExportKey()
-                        val salt = vm.getExportSalt()
-                        val encrypted = when {
-                            key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
-                            key != null -> encryptionService.encryptWithKey(json, key)
-                            else -> encryptionService.encrypt(json, DEFAULT_PASSWORD)
-                        }
-                        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-                        val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
-                        shareExport(context, encrypted, "application/octet-stream", "aritiq-export-$ts.aritiq")
-                    }
-                },
+                onClick = { exportWithPassword() },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Export All")
@@ -370,9 +336,9 @@ fun SettingsScreen(navigator: Navigator) {
         )
     }
 
-    // Import password dialog (stored key/default didn't match)
+    // Import password dialog (file is encrypted)
     if (showImportPasswordDialog) {
-        ImportPasswordDialog(
+        ExportPasswordDialog(
             error = importPasswordError,
             onConfirm = { password ->
                 val bytes = pendingImportBytes
@@ -401,52 +367,6 @@ fun SettingsScreen(navigator: Navigator) {
     }
 
     UpdateAvailableDialog(update = updateAvailable, onDismiss = { updateAvailable = null })
-}
-
-@Composable
-private fun ImportPasswordDialog(
-    error: String?,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var password by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Enter export password") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password") },
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                error?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = password.isNotBlank(), onClick = { onConfirm(password) }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 @Composable

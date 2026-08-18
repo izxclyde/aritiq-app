@@ -28,17 +28,15 @@ import androidx.compose.ui.draw.drawBehind
 import com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ExportService
-import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.data.repository.FolderRepository
 import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.domain.NoteProcessor
+import com.aritiq.calcnote.ui.components.rememberExportWithPassword
 import com.aritiq.calcnote.ui.navigation.Navigator
+import com.aritiq.calcnote.ui.settings.SettingsViewModel
 import com.aritiq.calcnote.ui.theme.editorTextStyle
 import com.aritiq.calcnote.ui.theme.paperColorScheme
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 
 /**
@@ -61,12 +59,17 @@ fun EditorScreen(
     noteId: String?,
 ) {
     val repo = koinInject<NoteRepository>()
-    val settingsRepo = koinInject<com.aritiq.calcnote.data.repository.SettingsRepository>()
     val exportService = koinInject<ExportService>()
     val folderRepo = koinInject<FolderRepository>()
     val encryptionService = remember { EncryptionService() }
     val vm = remember { EditorViewModel(repo, exportService, folderRepo) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val exportWithPassword = rememberExportWithPassword(
+        settingsViewModel = koinInject<SettingsViewModel>(),
+        encryptionService = encryptionService,
+        context = context,
+        getJson = { vm.exportJson() },
+    )
     LaunchedEffect(noteId) { vm.open(noteId) }
     val state by vm.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -159,29 +162,7 @@ fun EditorScreen(
                     }
                     }
                     if (state.id != null) {
-                        IconButton(onClick = {
-                            scope.launch {
-                                val json = vm.exportJson()
-                                if (json != null) {
-                                    val keyHex = settingsRepo.get("export_key")
-                                    val saltHex = settingsRepo.get("export_key_salt")
-                                    val key = if (!keyHex.isNullOrBlank()) {
-                                        com.aritiq.calcnote.data.export.decodeHex(keyHex)
-                                    } else null
-                                    val salt = if (!saltHex.isNullOrBlank()) {
-                                        com.aritiq.calcnote.data.export.decodeHex(saltHex)
-                                    } else null
-                                    val encrypted = when {
-                                        key != null && salt != null -> encryptionService.encryptWithKeyAndSalt(json, key, salt)
-                                        key != null -> encryptionService.encryptWithKey(json, key)
-                                        else -> encryptionService.encrypt(json, "4r1t1q-4pp")
-                                    }
-                                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-                                    val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
-                                    shareExport(context, encrypted, "application/octet-stream", "aritiq-export-$ts.aritiq")
-                                }
-                            }
-                        }) {
+                        IconButton(onClick = { exportWithPassword() }) {
                             Icon(Icons.Filled.Share, contentDescription = "Export")
                         }
                     }

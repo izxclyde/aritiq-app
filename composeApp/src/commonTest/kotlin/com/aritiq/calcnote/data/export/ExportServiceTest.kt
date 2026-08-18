@@ -31,6 +31,7 @@ class InMemoryNoteRepo : NoteRepository {
     override suspend fun upsert(note: Note) { notes.removeAll { it.id == note.id }; notes.add(note) }
     override suspend fun delete(id: String) { notes.removeAll { it.id == id } }
     override suspend fun selectByFolder(folderId: String): List<Note> = emptyList()
+    override suspend fun selectByFolderExcluding(excludedId: String): List<Note> = notes.filter { it.folderId != excludedId }
     override suspend fun setPinned(id: String, pinned: Boolean) {}
     override suspend fun setArchived(id: String, archived: Boolean) {}
     override suspend fun setFavorite(id: String, favorite: Boolean) {}
@@ -40,6 +41,14 @@ class InMemoryNoteRepo : NoteRepository {
 class InMemoryFolderRepo : FolderRepository {
     override suspend fun all(): List<Folder> = emptyList()
     override suspend fun getById(id: String): Folder? = null
+    override suspend fun getLockedFolder(): Folder? = null
+    override suspend fun ensureLockedFolderExists(): Folder = Folder(
+        id = com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID,
+        name = "Locked",
+        isLocked = true,
+        createdAt = Clock.System.now(),
+        updatedAt = Clock.System.now(),
+    )
     override suspend fun upsert(folder: Folder) {}
     override suspend fun delete(id: String) {}
 }
@@ -63,9 +72,32 @@ class ExportServiceTest {
         val repo = InMemoryNoteRepo()
         repo.seed(Note(id = "a", title = "Single", content = "sum 10", createdAt = now, updatedAt = now))
         val svc = ExportService(repo, InMemoryFolderRepo())
-        val json = svc.exportNoteJson("a")
+        val json = svc.exportNoteJson("a") ?: ""
         assertContains(json, "\"id\":\"a\"")
         assertContains(json, "\"title\":\"Single\"")
+    }
+
+    @Test fun export_single_note_missing_returns_null() = runTest {
+        val svc = ExportService(InMemoryNoteRepo(), InMemoryFolderRepo())
+        assertEquals(null, svc.exportNoteJson("nope"))
+    }
+
+    @Test fun export_all_json_includes_locked_note() = runTest {
+        val repo = InMemoryNoteRepo()
+        repo.seed(
+            Note(
+                id = "locked",
+                title = "Secret",
+                content = "pin 1234",
+                createdAt = now,
+                updatedAt = now,
+                folderId = com.aritiq.calcnote.data.db.LOCKED_FOLDER_ID,
+            )
+        )
+        val svc = ExportService(repo, InMemoryFolderRepo())
+        val json = svc.exportAllJson()
+        assertContains(json, "\"id\":\"locked\"")
+        assertContains(json, "\"folderId\":\"__locked__\"")
     }
 
     @Test fun export_selected_json() = runTest {
