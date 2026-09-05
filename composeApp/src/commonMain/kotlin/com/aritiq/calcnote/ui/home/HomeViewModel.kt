@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import kotlinx.datetime.Clock
 
 class HomeViewModel(
@@ -32,6 +35,7 @@ class HomeViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+    val snackbarHostState = SnackbarHostState()
     private var recentJob: Job? = null
 
     fun load() {
@@ -55,7 +59,9 @@ class HomeViewModel(
                     } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
                     _state.value = _state.value.copy(
                         recent = sorted, pinned = pinned, archived = archived,
-                        sortedGroupedRecent = grouped, loading = false,
+                        sortedGroupedRecent = grouped,
+                        totals = totalsFor(pinned) + totalsFor(recent) + totalsFor(archived),
+                        loading = false,
                     )
                 }
                 .launchIn(scope)
@@ -81,7 +87,7 @@ class HomeViewModel(
                 } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
                 _state.value = _state.value.copy(
                     recent = sorted, pinned = emptyList(), archived = emptyList(),
-                    sortedGroupedRecent = grouped, loading = false,
+                    sortedGroupedRecent = grouped, totals = totalsFor(notes), loading = false,
                 )
             }
         }
@@ -119,7 +125,7 @@ class HomeViewModel(
             val results = repo.search(q).filter { it.folderId != LOCKED_FOLDER_ID }
             val folderId = _state.value.selectedFolderId
             val filtered = if (folderId != null) results.filter { it.folderId == folderId } else results
-            _state.value = _state.value.copy(searchResults = filtered)
+            _state.value = _state.value.copy(searchResults = filtered, totals = totalsFor(filtered))
         }
     }
 
@@ -151,6 +157,40 @@ class HomeViewModel(
         }
     }
 
+    /** Archive with an Undo snackbar; reverting restores the note to the active list. */
+    fun archiveWithUndo(note: Note) {
+        scope.launch {
+            repo.setArchived(note.id, true)
+            reload()
+            val result = snackbarHostState.showSnackbar(
+                message = "Note archived",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                repo.setArchived(note.id, false)
+                reload()
+            }
+        }
+    }
+
+    /** Restore with an Undo snackbar; reverting re-archives the note. */
+    fun restoreWithUndo(note: Note) {
+        scope.launch {
+            repo.setArchived(note.id, false)
+            reload()
+            val result = snackbarHostState.showSnackbar(
+                message = "Note restored",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                repo.setArchived(note.id, true)
+                reload()
+            }
+        }
+    }
+
     fun toggleShowArchived() {
         _state.value = _state.value.copy(showArchived = !_state.value.showArchived)
     }
@@ -175,6 +215,10 @@ class HomeViewModel(
             reload()
         }
     }
+
+    /** Live totals per note id, for the conditional Σ chip on cards. Zero totals are omitted. */
+    private fun totalsFor(notes: List<Note>): Map<String, Double> =
+        notes.associate { it.id to NoteProcessor.liveTotal(it.content) }.filterValues { it != 0.0 }
 
     private fun sort(notes: List<Note>, order: SortOrder): List<Note> = when (order) {
         SortOrder.NEWEST_FIRST -> notes.sortedByDescending { it.createdAt }
@@ -238,5 +282,6 @@ class HomeViewModel(
         val selectedIds: Set<String> = emptySet(),
         val folders: List<Folder> = emptyList(),
         val selectedFolderId: String? = null,
+        val totals: Map<String, Double> = emptyMap(),
     )
 }
