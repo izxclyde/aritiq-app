@@ -46,6 +46,9 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 > Log every completed change here (date · item · summary) so progress is auditable.
 
+### 2026-09-05 (hygiene)
+- Correction to the 2026-08-16 gate note below: `:composeApp:testDebugUnitTest` is green on HEAD again — the `commonTest` fakes were completed by the locked-note export/import fix (ff30b8a). 77/77 tests pass as of this date.
+
 ### 2026-08-16 (Phase B1–B5 + C1)
 - B1: Shared `EmptyState` (icon + title + CTA); Home (all 4 view modes), search ("No results"), and Folders ("No folders yet" → create dialog) now show it.
 - B2: Detailed list rows show `createdAt` date (`August 16`, matches month-group headers; `formatDate` helper).
