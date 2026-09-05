@@ -120,6 +120,14 @@ android {
         }
     }
 
+    lint {
+        // False positive with Compose Multiplatform's remember: `remember { Navigator() }`
+        // returns the Navigator instance (code compiles and runs), but lint resolves the
+        // KMP remember overload as returning Unit. Revisit after Compose upgrades.
+        disable += "RememberReturnType"
+        abortOnError = true
+    }
+
     sourceSets {
         named("main") {
             // SQLDelight .sq files live here; the plugin emits Kotlin into build.
