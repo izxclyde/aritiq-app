@@ -25,8 +25,6 @@ class ExportService(
         return json.encodeToString(AritiqExport.serializer(), envelope)
     }
 
-    suspend fun exportAllCsv(): String = buildCsv(repo.all().filter { it.folderId != LOCKED_FOLDER_ID })
-
     suspend fun exportNoteJson(noteId: String): String? {
         val note = repo.getById(noteId) ?: return null
         return json.encodeToString(NoteExport.serializer(), NoteExport.fromDomain(note, repo.tagsForNote(note.id)))
@@ -43,26 +41,5 @@ class ExportService(
             folders = folders,
         )
         return json.encodeToString(AritiqExport.serializer(), envelope)
-    }
-
-    suspend fun exportSelectedCsv(noteIds: List<String>): String {
-        val notes = noteIds.mapNotNull { repo.getById(it) }
-            .filter { it.folderId != LOCKED_FOLDER_ID }
-        return buildCsv(notes)
-    }
-
-    private fun buildCsv(notes: List<com.aritiq.calcnote.domain.Note>): String {
-        val sb = StringBuilder()
-        sb.appendLine("title,content")
-        for (note in notes) {
-            sb.appendLine("${csvEscape(note.title)},${csvEscape(note.content)}")
-        }
-        return sb.toString()
-    }
-
-    private fun csvEscape(value: String): String {
-        return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            "\"${value.replace("\"", "\"\"")}\""
-        } else value
     }
 }

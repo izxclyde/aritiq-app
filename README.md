@@ -117,8 +117,9 @@ Persisted theme setting now loads on cold start so System/Light/Dark works relia
 Single note (share icon in editor), selected notes (long-press multi-select on Home), or
 bulk (Settings). JSON preserves full schema (`id`, `title`, `content`, timestamps,
 `folderId`, `tags`, `isPinned`, `isArchived`, `favorite`, `drawing` for forward compat).
-Import supports MERGE (skip duplicates by id) or REPLACE (wipe and load). CSV code exists
-in the services but is deferred (JSON is more robust and data stays within the app).
+Import supports MERGE (skip duplicates by id) or REPLACE (wipe and load). JSON is the only
+export/import format — the unused CSV functions were removed (they had no encryption path and
+no UI; if a spreadsheet export is ever wanted, design it with the same password encryption).
 
 ---
 
