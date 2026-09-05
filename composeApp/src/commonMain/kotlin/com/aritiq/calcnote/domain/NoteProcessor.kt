@@ -32,8 +32,8 @@ import com.aritiq.calcnote.calculator.Calculator
  * "grandtotal", "Σ", "σύνολο") are treated as closing markers, not additive. The bottom
  * bar shows the sum of all additive lines before the marker.
  *
- * ponytail: live re-evaluation when a number above an already-filled `total = ...` line
- * changes is Phase 2. For now the user re-types `=` after the total keyword to refresh.
+ * A filled closing line (`total = 6000`) is refreshed by [refreshFilledTotal]: when numbers
+ * above it change, the editor rewrites its RHS to the live sum (cursor-preserving).
  */
 object NoteProcessor {
 
@@ -199,6 +199,58 @@ object NoteProcessor {
         // Only a blank RHS counts as a live trigger; a filled RHS means the user has
         // written their own value and we must not override it.
         return rhs.isEmpty() && lhs.lowercase() in totalKeywords
+    }
+
+    /**
+     * Live refresh for a filled closing-total line: when the note's last non-empty line is a
+     * total-keyword assignment with a plain numeric RHS (`total = 6000`) and the sum of all
+     * preceding additive lines differs from that RHS, returns the rewritten content plus the
+     * cursor mapping (shift selections at/after [TotalRefresh.fromIndex] by [TotalRefresh.shift]).
+     * Returns null when there is nothing to refresh: no total line, values already equal,
+     * no additive lines before it, or a non-numeric RHS the user wrote deliberately.
+     */
+    fun refreshFilledTotal(content: String): TotalRefresh? {
+        val lines = content.split('\n')
+        val lastIdx = lines.indexOfLast { it.isNotBlank() }
+        if (lastIdx < 0) return null
+        val last = lines[lastIdx]
+        val eq = last.indexOf('=')
+        if (eq < 0) return null
+        if (last.substring(0, eq).trim().lowercase() !in totalKeywords) return null
+        val rhs = last.substring(eq + 1).trim()
+        if (rhs.isEmpty()) return null
+        val current = rhs.toDoubleOrNull() ?: return null
+
+        val vars = LinkedHashMap<String, Double>()
+        var sum = 0.0
+        var any = false
+        for (i in 0 until lastIdx) {
+            val v = lineValue(lines[i], vars)
+            if (v != null) { sum += v; any = true }
+        }
+        if (!any) return null
+        if (kotlin.math.abs(sum - current) < 1e-9) return null
+
+        val newLine = last.take(eq + 1) + " " + formatTotal(sum)
+        val newContent = buildString {
+            lines.forEachIndexed { i, line ->
+                append(if (i == lastIdx) newLine else line)
+                if (i != lines.lastIndex) append('\n')
+            }
+        }
+        val fromIndex = lines.take(lastIdx).sumOf { it.length + 1 }
+        return TotalRefresh(newContent, fromIndex, newLine.length - last.length)
+    }
+
+    data class TotalRefresh(val newContent: String, val fromIndex: Int, val shift: Int)
+
+    /**
+     * Canonical total formatting shared by the editor readout, home cards, and the
+     * filled-total live refresh: two decimals with a bare ".00" stripped.
+     */
+    fun formatTotal(v: Double): String {
+        val rounded = "%.2f".format(v)
+        return if (rounded.endsWith(".00")) rounded.dropLast(3) else rounded
     }
 
     /**
