@@ -28,6 +28,11 @@ actual fun encryptImpl(plaintext: String, password: String): ByteArray {
 }
 
 actual fun decryptImpl(ciphertext: ByteArray, password: String): String {
+    // magic + salt + IV must all be present; anything shorter is a corrupt/truncated file,
+    // not a decryption failure — fail fast with a clear cause instead of a slicing error.
+    val headerLen = MAGIC.length + SALT_SIZE + IV_SIZE
+    require(ciphertext.size > headerLen) { "File is too short to be an Aritiq export" }
+
     val magicLen = MAGIC.length
     val salt = ciphertext.sliceArray(magicLen until magicLen + SALT_SIZE)
     val iv = ciphertext.sliceArray(magicLen + SALT_SIZE until magicLen + SALT_SIZE + IV_SIZE)
