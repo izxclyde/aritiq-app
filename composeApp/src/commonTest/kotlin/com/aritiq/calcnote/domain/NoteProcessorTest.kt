@@ -272,4 +272,56 @@ class NoteProcessorTest {
         assertEquals("Untitled", title("# \n"))
         assertEquals("My note", title("# My note\nbody"))
     }
+
+    // ---- filled-total live refresh ---------------------------------------------------
+
+    private fun refresh(content: String) = NoteProcessor.refreshFilledTotal(content)
+
+    @Test fun refresh_rewrites_stale_total_rhs() {
+        val r = refresh("milk 10\nrent = 1500\ntotal = 5")
+        assertEquals("milk 10\nrent = 1500\ntotal = 1510", r?.newContent)
+        assertEquals(3, r?.shift) // "total = 5" (9) -> "total = 1510" (12)
+    }
+
+    @Test fun refresh_returns_null_when_rhs_already_matches() {
+        assertNull(refresh("milk 10\ntotal = 10"))
+    }
+
+    @Test fun refresh_handles_decimals_and_strips_bare_zeros() {
+        assertEquals("milk 12.5\ntotal = 12.50", refresh("milk 12.5\ntotal = 0")?.newContent)
+    }
+
+    @Test fun refresh_keeps_label_and_separator_prefix() {
+        assertEquals("milk 10\nΣ  = 10", refresh("milk 10\nΣ  =  3")?.newContent)
+    }
+
+    @Test fun refresh_ignores_non_total_and_non_numeric_lines() {
+        assertNull(refresh("milk 10\nrent = 1500")) // identifier, not a total keyword
+        assertNull(refresh("milk 10\ntotal = lots")) // user's own text
+        assertNull(refresh("milk 10\njust a thought")) // no '=' at all
+    }
+
+    @Test fun refresh_ignores_triggers_and_empty_leading_content() {
+        assertNull(refresh("milk 10\ntotal")) // bare trigger — live readout handles this
+        assertNull(refresh("milk 10\ntotal = "))
+        assertNull(refresh("total = 5")) // nothing additive before it
+        assertNull(refresh(""))
+    }
+
+    @Test fun refresh_cursor_mapping_covers_trailing_blank_lines() {
+        val content = "milk 10\ntotal = 5\n\n"
+        val r = refresh(content)
+        assertEquals("milk 10\ntotal = 10\n\n", r?.newContent)
+        assertEquals(content.indexOf("total"), r?.fromIndex)
+    }
+
+    // ---- total formatting -------------------------------------------------------------
+
+    @Test fun format_total_strips_bare_decimals() {
+        assertEquals("0", NoteProcessor.formatTotal(0.0))
+        assertEquals("10", NoteProcessor.formatTotal(10.0))
+        assertEquals("12.50", NoteProcessor.formatTotal(12.5))
+        assertEquals("1516.25", NoteProcessor.formatTotal(1516.25))
+        assertEquals("1516.25", NoteProcessor.formatTotal(1516.254))
+    }
 }
