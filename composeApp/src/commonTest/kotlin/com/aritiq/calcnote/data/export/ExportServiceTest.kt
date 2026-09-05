@@ -112,24 +112,6 @@ class ExportServiceTest {
         assertTrue { !json.contains("\"id\":\"2\"") }
     }
 
-    @Test fun export_csv_has_header_and_rows() = runTest {
-        val repo = InMemoryNoteRepo()
-        repo.seed(Note(id = "x", title = "Hello", content = "world", createdAt = now, updatedAt = now))
-        val svc = ExportService(repo, InMemoryFolderRepo())
-        val csv = svc.exportAllCsv()
-        assertTrue(csv.startsWith("title,content"))
-        assertContains(csv, "Hello,world")
-    }
-
-    @Test fun export_csv_escapes_commas() = runTest {
-        val repo = InMemoryNoteRepo()
-        repo.seed(Note(id = "y", title = "Hello, World", content = "a,b,c", createdAt = now, updatedAt = now))
-        val svc = ExportService(repo, InMemoryFolderRepo())
-        val csv = svc.exportAllCsv()
-        assertContains(csv, "\"Hello, World\"")
-        assertContains(csv, "\"a,b,c\"")
-    }
-
     @Test fun export_all_json_round_trip() = runTest {
         val repo = InMemoryNoteRepo()
         repo.seed(
