@@ -193,7 +193,7 @@ fun SettingsScreen(navigator: Navigator) {
                     }
                 }
             } else {
-                Text("No password set. Exports use default password.", style = MaterialTheme.typography.bodySmall)
+                Text("No password set. Exports will ask for a password each time.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { showSetPasswordDialog = true }) {
                     Text("Set Password")
                 }
@@ -312,8 +312,10 @@ fun SettingsScreen(navigator: Navigator) {
         PasswordSetDialog(
             title = "Set Export Password",
             onConfirm = { password ->
-                vm.setExportPassword(password)
-                showSetPasswordDialog = false
+                scope.launch {
+                    vm.setExportPassword(password)
+                    showSetPasswordDialog = false
+                }
             },
             onDismiss = { showSetPasswordDialog = false },
         )
@@ -323,12 +325,14 @@ fun SettingsScreen(navigator: Navigator) {
     if (showChangePasswordDialog) {
         PasswordChangeDialog(
             onConfirm = { oldPassword, newPassword ->
-                val success = vm.changeExportPassword(oldPassword, newPassword)
-                if (success) {
-                    showChangePasswordDialog = false
-                    passwordError = null
-                } else {
-                    passwordError = "Wrong password"
+                scope.launch {
+                    val success = vm.changeExportPassword(oldPassword, newPassword)
+                    if (success) {
+                        showChangePasswordDialog = false
+                        passwordError = null
+                    } else {
+                        passwordError = "Wrong password"
+                    }
                 }
             },
             onDismiss = { showChangePasswordDialog = false; passwordError = null },

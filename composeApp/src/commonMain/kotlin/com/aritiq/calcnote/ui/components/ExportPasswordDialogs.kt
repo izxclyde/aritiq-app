@@ -168,8 +168,10 @@ fun rememberExportWithPassword(
             onSave = {
                 val password = pendingPassword
                 if (password != null) {
-                    settingsViewModel.setExportPassword(password)
-                    doExport(password)
+                    scope.launch {
+                        settingsViewModel.setExportPassword(password)
+                        doExport(password)
+                    }
                 } else {
                     showSaveDialog = false
                 }

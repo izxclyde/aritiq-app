@@ -30,7 +30,8 @@ class SettingsViewModel(
             _state.value = UiState(
                 themeMode = ThemeMode.fromString(all["theme"] ?: "system"),
                 accent = NotebookAccent.fromString(all["accent"] ?: ""),
-                passwordSet = all.containsKey("export_password_hash"),
+                // Blank means unset: clearExportPassword() writes "" and legacy rows may exist.
+                passwordSet = !all["export_password_hash"].isNullOrBlank(),
             )
         }
     }
@@ -45,14 +46,14 @@ class SettingsViewModel(
         scope.launch { repo.set("accent", accent.name) }
     }
 
-    fun setExportPassword(password: String) {
+    suspend fun setExportPassword(password: String) {
         val hash = encryptionService.hashPassword(password)
-        runBlocking { repo.set("export_password_hash", hash) }
+        repo.set("export_password_hash", hash)
         _state.value = _state.value.copy(passwordSet = true)
     }
 
-    fun changeExportPassword(oldPassword: String, newPassword: String): Boolean {
-        val storedHash = runBlocking { repo.get("export_password_hash") } ?: return false
+    suspend fun changeExportPassword(oldPassword: String, newPassword: String): Boolean {
+        val storedHash = repo.get("export_password_hash") ?: return false
         if (!encryptionService.verifyPassword(oldPassword, storedHash)) return false
         setExportPassword(newPassword)
         return true
@@ -99,8 +100,4 @@ class SettingsViewModel(
         val importResult: String? = null,
         val passwordSet: Boolean = false,
     )
-}
-
-private fun <T> runBlocking(block: suspend () -> T): T {
-    return kotlinx.coroutines.runBlocking { block() }
 }
