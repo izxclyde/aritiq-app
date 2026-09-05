@@ -32,8 +32,20 @@ class SettingsViewModel(
                 accent = NotebookAccent.fromString(all["accent"] ?: ""),
                 // Blank means unset: clearExportPassword() writes "" and legacy rows may exist.
                 passwordSet = !all["export_password_hash"].isNullOrBlank(),
+                autoLockTimeout = AutoLockTimeout.fromPersisted(all["auto_lock_timeout"]),
+                updateCheckEnabled = all["update_check_enabled"] != "false",
             )
         }
+    }
+
+    fun setAutoLockTimeout(timeout: AutoLockTimeout) {
+        _state.value = _state.value.copy(autoLockTimeout = timeout)
+        scope.launch { repo.set("auto_lock_timeout", timeout.persisted) }
+    }
+
+    fun setUpdateCheckEnabled(enabled: Boolean) {
+        _state.value = _state.value.copy(updateCheckEnabled = enabled)
+        scope.launch { repo.set("update_check_enabled", if (enabled) "true" else "false") }
     }
 
     fun setTheme(mode: ThemeMode) {
@@ -80,6 +92,17 @@ class SettingsViewModel(
         }
     }
 
+    /** How long the app can sit in the background before the locked folder re-locks. */
+    enum class AutoLockTimeout(val persisted: String, val label: String) {
+        Immediately("immediately", "Immediately"),
+        OneMinute("1min", "1 min"),
+        FiveMinutes("5min", "5 min");
+        companion object {
+            fun fromPersisted(value: String?): AutoLockTimeout =
+                entries.firstOrNull { it.persisted == value } ?: Immediately
+        }
+    }
+
     fun importResult(msg: String) {
         _state.value = _state.value.copy(importResult = msg)
     }
@@ -99,5 +122,7 @@ class SettingsViewModel(
         val accent: NotebookAccent = NotebookAccent.TEAL,
         val importResult: String? = null,
         val passwordSet: Boolean = false,
+        val autoLockTimeout: AutoLockTimeout = AutoLockTimeout.Immediately,
+        val updateCheckEnabled: Boolean = true,
     )
 }

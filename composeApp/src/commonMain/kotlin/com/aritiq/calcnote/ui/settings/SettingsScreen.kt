@@ -181,6 +181,26 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
+            Text("Locked Folder", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Lock automatically after leaving the app",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsViewModel.AutoLockTimeout.entries.forEach { timeout ->
+                    FilterChip(
+                        selected = state.autoLockTimeout == timeout,
+                        onClick = { vm.setAutoLockTimeout(timeout) },
+                        label = { Text(timeout.label) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
             Text("Export Password", style = MaterialTheme.typography.titleSmall)
             if (state.passwordSet) {
                 Text("Password is set", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -249,6 +269,18 @@ fun SettingsScreen(navigator: Navigator) {
             }
             updateStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Automatic update checks (daily)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = state.updateCheckEnabled,
+                    onCheckedChange = { vm.setUpdateCheckEnabled(it) },
+                )
             }
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
             Text(
