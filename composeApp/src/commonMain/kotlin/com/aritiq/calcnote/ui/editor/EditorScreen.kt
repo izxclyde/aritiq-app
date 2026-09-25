@@ -63,6 +63,8 @@ fun EditorScreen(
     val folderRepo = koinInject<FolderRepository>()
     val encryptionService = remember { EncryptionService() }
     val vm = remember { EditorViewModel(repo, exportService, folderRepo) }
+    // remember{}-scoped VM owns a SupervisorJob; without this every editor visit leaks a scope.
+    DisposableEffect(vm) { onDispose { vm.cancel() } }
     val context = androidx.compose.ui.platform.LocalContext.current
     val exportWithPassword = rememberExportWithPassword(
         settingsViewModel = koinInject<SettingsViewModel>(),
@@ -175,37 +177,42 @@ fun EditorScreen(
         bottomBar = { StatusBar(state) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // The ruled-paper drawBehind is remembered: an inline lambda allocates a new instance
+            // per recomposition, invalidating the draw layer and repainting every line per keystroke.
+            val ruledPaper = remember {
+                Modifier.drawBehind {
+                    val lineSpacing = 24.sp.toPx()
+                    val strokeW = 1.dp.toPx()
+                    val marginX = 40.dp.toPx()
+
+                    // Horizontal ruled lines — span full page width
+                    var y = lineSpacing * 0.75f
+                    while (y < size.height) {
+                        drawLine(
+                            color = Color(0xFFA0988E),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = strokeW,
+                        )
+                        y += lineSpacing
+                    }
+
+                    // Vertical margin line
+                    drawLine(
+                        color = Color(0xFFC47070),
+                        start = Offset(marginX, 0f),
+                        end = Offset(marginX, size.height),
+                        strokeWidth = strokeW * 1.5f,
+                    )
+                }
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
                 BoxWithConstraints(
-                    modifier = Modifier
+                    modifier = ruledPaper
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
-                        .drawBehind {
-                            val lineSpacing = 24.sp.toPx()
-                            val strokeW = 1.dp.toPx()
-                            val marginX = 40.dp.toPx()
-
-                            // Horizontal ruled lines — span full page width
-                            var y = lineSpacing * 0.75f
-                            while (y < size.height) {
-                                drawLine(
-                                    color = Color(0xFFA0988E),
-                                    start = Offset(0f, y),
-                                    end = Offset(size.width, y),
-                                    strokeWidth = strokeW,
-                                )
-                                y += lineSpacing
-                            }
-
-                            // Vertical margin line
-                            drawLine(
-                                color = Color(0xFFC47070),
-                                start = Offset(marginX, 0f),
-                                end = Offset(marginX, size.height),
-                                strokeWidth = strokeW * 1.5f,
-                            )
-                        },
+                        .padding(16.dp),
                 ) {
                     Column {
                         BasicTextField(

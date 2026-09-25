@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import com.aritiq.calcnote.appVersion
+import com.aritiq.calcnote.isDebugBuild
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ImportMode
@@ -152,7 +153,8 @@ fun SettingsScreen(navigator: Navigator) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 NotebookAccent.entries.forEach { accent ->
                     val selected = state.accent == accent
-                    val accentScheme = if (isDark) accent.dark else accent.light
+                    // .light/.dark build a full ColorScheme per read; only .primary is used here
+                    val accentScheme = remember(isDark, accent) { if (isDark) accent.dark else accent.light }
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -229,26 +231,30 @@ fun SettingsScreen(navigator: Navigator) {
             Spacer(Modifier.height(8.dp))
             Text("App: Aritiq", style = MaterialTheme.typography.bodyMedium)
             Text("Version: ${appVersion()}", style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(
-                onClick = {
-                    updateStatus = "Checking..."
-                    scope.launch(Dispatchers.IO) {
-                        val info = checkForUpdate()
-                        withContext(Dispatchers.Main) {
-                            if (info != null) {
-                                updateStatus = null
-                                updateAvailable = info
-                            } else {
-                                updateStatus = "You're up to date"
+            // Debug builds never check (see UpdateChecker.android), so showing the button would
+            // only ever report a misleading "You're up to date".
+            if (!isDebugBuild()) {
+                OutlinedButton(
+                    onClick = {
+                        updateStatus = "Checking..."
+                        scope.launch(Dispatchers.IO) {
+                            val info = checkForUpdate()
+                            withContext(Dispatchers.Main) {
+                                if (info != null) {
+                                    updateStatus = null
+                                    updateAvailable = info
+                                } else {
+                                    updateStatus = "You're up to date"
+                                }
                             }
                         }
-                    }
-                },
-            ) {
-                Text("Check for updates")
-            }
-            updateStatus?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    },
+                ) {
+                    Text("Check for updates")
+                }
+                updateStatus?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
             }
             Text("Developer: HNatividad", style = MaterialTheme.typography.bodyMedium)
             Text(

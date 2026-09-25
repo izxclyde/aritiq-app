@@ -1,5 +1,6 @@
 package com.aritiq.calcnote.domain
 
+import androidx.compose.runtime.Immutable
 import com.aritiq.calcnote.calculator.Calculator
 
 /**
@@ -38,6 +39,9 @@ import com.aritiq.calcnote.calculator.Calculator
 object NoteProcessor {
 
     private val identRegex = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
+    // hoisted: stats() ran on every keystroke and a fresh Regex per call is pure waste
+    private val whitespaceRegex = Regex("\\s+")
 
     /** Keywords that label a closing total line (not an additive entry). */
     val totalKeywords = setOf(
@@ -173,7 +177,7 @@ object NoteProcessor {
     /** Word / character counts for the bottom status bar. */
     fun stats(content: String): Stats {
         val text = content.trim()
-        val words = if (text.isEmpty()) 0 else text.split(Regex("\\s+")).size
+        val words = if (text.isEmpty()) 0 else text.split(whitespaceRegex).size
         val chars = content.length
         return Stats(words = words, characters = chars)
     }
@@ -220,5 +224,6 @@ object NoteProcessor {
         return if (lhs.lowercase() in totalKeywords && lastTrim.substring(eq + 1).trim().isEmpty()) lhs else null
     }
 
+    @Immutable
     data class Stats(val words: Int, val characters: Int)
 }

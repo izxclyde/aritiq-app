@@ -76,7 +76,12 @@ fun HomeScreen(navigator: Navigator) {
     val folderRepo = koinInject<FolderRepository>()
     val lockManager = koinInject<LockManager>()
     val encryptionService = remember { EncryptionService() }
+    // isAvailable() is a BiometricManager binder call; it is stable for the life of the screen.
+    val canLock = remember(lockManager) { lockManager.isAvailable() }
     val vm = remember { HomeViewModel(repo, settingsRepo, exportService, folderRepo, lockManager) }
+    // The VM owns a SupervisorJob scope that nothing else cancels, so every Home visit used to leak
+    // a SQLDelight query listener. Tie its lifetime to composition instead.
+    DisposableEffect(vm) { onDispose { vm.cancel() } }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val exportWithPassword = rememberExportWithPassword(
@@ -114,7 +119,7 @@ fun HomeScreen(navigator: Navigator) {
                         IconButton(onClick = { exportWithPassword() }) {
                             Icon(Icons.Filled.Share, contentDescription = "Export selected")
                         }
-                        if (lockManager.isAvailable()) {
+                        if (canLock) {
                             IconButton(onClick = {
                                 vm.moveToLocked(state.selectedIds)
                                 vm.exitSelectMode()
@@ -211,7 +216,7 @@ fun HomeScreen(navigator: Navigator) {
                 }
             }
 
-            if (lockManager.isAvailable()) {
+            if (canLock) {
                 LockedRow(lockManager, navigator)
                 Spacer(Modifier.height(80.dp))
             }
@@ -255,14 +260,26 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
         ViewMode.SIMPLE_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
             items(state.searchResults, key = { it.id }) { note ->
                 SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
-                    NoteRowSimple(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                    NoteRowSimple(
+                        note = note,
+                        onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                        vm = vm,
+                        selected = note.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
         }
         ViewMode.DETAILED_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
             items(state.searchResults, key = { it.id }) { note ->
                 SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
-                    NoteRowDetailed(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                    NoteRowDetailed(
+                        note = note,
+                        onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                        vm = vm,
+                        selected = note.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
         }
@@ -274,7 +291,13 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.searchResults, key = { it.id }) { note ->
-                NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                NoteCardSmall(
+                    note = note,
+                    onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                    vm = vm,
+                    selected = note.id in state.selectedIds,
+                    isSelecting = state.isSelecting,
+                )
             }
         }
         ViewMode.LARGE_GRID -> LazyVerticalGrid(
@@ -289,6 +312,8 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
                     onOpen = { navigator.navigate(Route.Editor(note.id)) },
                     onTogglePin = { vm.togglePinned(note) },
                     vm = vm,
+                    selected = note.id in state.selectedIds,
+                    isSelecting = state.isSelecting,
                 )
             }
         }
@@ -313,13 +338,25 @@ private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigato
                 item { SectionHeader("Pinned") }
                 items(state.pinned, key = { it.id }) { note ->
                     SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
-                        NoteRowSimple(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                        NoteRowSimple(
+                            note = note,
+                            onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                            vm = vm,
+                            selected = note.id in state.selectedIds,
+                            isSelecting = state.isSelecting,
+                        )
                     }
                 }
             }
             groupedItems(state, navigator, vm) { n, onOpen ->
                 SwipeToArchive(note = n, onArchive = { vm.archive(n) }) {
-                    NoteRowSimple(note = n, onOpen = onOpen, vm = vm)
+                    NoteRowSimple(
+                        note = n,
+                        onOpen = onOpen,
+                        vm = vm,
+                        selected = n.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
             archivedSection(state, vm, navigator)
@@ -345,13 +382,25 @@ private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, naviga
                 item { SectionHeader("Pinned") }
                 items(state.pinned, key = { it.id }) { note ->
                     SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
-                        NoteRowDetailed(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                        NoteRowDetailed(
+                            note = note,
+                            onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                            vm = vm,
+                            selected = note.id in state.selectedIds,
+                            isSelecting = state.isSelecting,
+                        )
                     }
                 }
             }
             groupedItems(state, navigator, vm) { n, onOpen ->
                 SwipeToArchive(note = n, onArchive = { vm.archive(n) }) {
-                    NoteRowDetailed(note = n, onOpen = onOpen, vm = vm)
+                    NoteRowDetailed(
+                        note = n,
+                        onOpen = onOpen,
+                        vm = vm,
+                        selected = n.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
             archivedSection(state, vm, navigator)
@@ -544,7 +593,13 @@ private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCardSmall(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, vm = vm)
+                    NoteCardSmall(
+                        note = note,
+                        onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                        vm = vm,
+                        selected = note.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
             ArchivedSectionColumn(state, vm, navigator)
@@ -579,7 +634,14 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCardLarge(note = note, onOpen = { navigator.navigate(Route.Editor(note.id)) }, onTogglePin = { vm.togglePinned(note) }, vm = vm)
+                    NoteCardLarge(
+                        note = note,
+                        onOpen = { navigator.navigate(Route.Editor(note.id)) },
+                        onTogglePin = { vm.togglePinned(note) },
+                        vm = vm,
+                        selected = note.id in state.selectedIds,
+                        isSelecting = state.isSelecting,
+                    )
                 }
             }
             ArchivedSectionColumn(state, vm, navigator)
@@ -588,22 +650,29 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
     }
 }
 
+// Rows take selected/isSelecting as plain params instead of collecting vm.state themselves:
+// a per-row collectAsState() makes every visible row recompose on ANY state change, including each
+// search keystroke.
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun NoteRowSimple(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
-    val state = vm.state.collectAsState().value
-    val selected = note.id in state.selectedIds
+private fun NoteRowSimple(
+    note: Note,
+    onOpen: () -> Unit,
+    vm: HomeViewModel,
+    selected: Boolean,
+    isSelecting: Boolean,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = { if (state.isSelecting) vm.toggleSelection(note.id) else onOpen() },
-                onLongClick = { if (!state.isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
+                onClick = { if (isSelecting) vm.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
             ),
         tonalElevation = 0.dp,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = if (state.isSelecting) 8.dp else 16.dp)) {
-            if (state.isSelecting) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = if (isSelecting) 8.dp else 16.dp)) {
+            if (isSelecting) {
                 Checkbox(checked = selected, onCheckedChange = { vm.toggleSelection(note.id) })
             }
             Text(
@@ -619,17 +688,21 @@ private fun NoteRowSimple(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun NoteRowDetailed(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
-    val state = vm.state.collectAsState().value
-    val selected = note.id in state.selectedIds
+private fun NoteRowDetailed(
+    note: Note,
+    onOpen: () -> Unit,
+    vm: HomeViewModel,
+    selected: Boolean,
+    isSelecting: Boolean,
+) {
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = { if (state.isSelecting) vm.toggleSelection(note.id) else onOpen() },
-                onLongClick = { if (!state.isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
+                onClick = { if (isSelecting) vm.toggleSelection(note.id) else onOpen() },
+                onLongClick = { if (!isSelecting) { vm.toggleSelectMode(); vm.toggleSelection(note.id) } },
             ),
-        leadingContent = if (state.isSelecting) {
+        leadingContent = if (isSelecting) {
             { Checkbox(checked = selected, onCheckedChange = { vm.toggleSelection(note.id) }) }
         } else null,
         headlineContent = {
@@ -675,10 +748,13 @@ private fun NoteRowDetailed(note: Note, onOpen: () -> Unit, vm: HomeViewModel) {
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun NoteCardSmall(note: Note, onOpen: () -> Unit, vm: HomeViewModel?) {
-    val state = vm?.state?.collectAsState()?.value
-    val selected = state?.let { note.id in it.selectedIds } ?: false
-    val isSelecting = state?.isSelecting ?: false
+private fun NoteCardSmall(
+    note: Note,
+    onOpen: () -> Unit,
+    vm: HomeViewModel?,
+    selected: Boolean,
+    isSelecting: Boolean,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -700,10 +776,14 @@ private fun NoteCardSmall(note: Note, onOpen: () -> Unit, vm: HomeViewModel?) {
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun NoteCardLarge(note: Note, onOpen: () -> Unit, onTogglePin: () -> Unit, vm: HomeViewModel?) {
-    val state = vm?.state?.collectAsState()?.value
-    val selected = state?.let { note.id in it.selectedIds } ?: false
-    val isSelecting = state?.isSelecting ?: false
+private fun NoteCardLarge(
+    note: Note,
+    onOpen: () -> Unit,
+    onTogglePin: () -> Unit,
+    vm: HomeViewModel?,
+    selected: Boolean,
+    isSelecting: Boolean,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()

@@ -1,0 +1,6 @@
+-- The schema had no indexes at all, so every home-screen query was a full table scan.
+-- Kept byte-identical to the CREATE INDEX block in Note.sq.
+CREATE INDEX IF NOT EXISTS idx_note_recent ON note(is_archived, is_pinned, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_archived ON note(is_archived, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_folder ON note(folder_id, is_archived, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_updated ON note(updated_at DESC);

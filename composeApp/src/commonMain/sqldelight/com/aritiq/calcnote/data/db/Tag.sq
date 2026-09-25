@@ -34,3 +34,10 @@ SELECT t.* FROM tag t
 INNER JOIN note_tag nt ON nt.tag_id = t.id
 WHERE nt.note_id = :noteId
 ORDER BY t.name ASC;
+
+-- Batched form of tagsForNote: exporting N notes used to fire N+1 of these.
+tagsForNotes:
+SELECT nt.note_id, t.* FROM tag t
+INNER JOIN note_tag nt ON nt.tag_id = t.id
+WHERE nt.note_id IN :noteIds
+ORDER BY t.name ASC;

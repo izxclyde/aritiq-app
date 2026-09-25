@@ -18,7 +18,8 @@ object Calculator {
         variables: Map<String, Double> = emptyMap(),
     ): Result<Double> {
         if (expression.isBlank()) return Result.success(0.0)
-        val lower = variables.entries.associate { it.key.lowercase() to it.value }
+        // emptyMap() is by far the common case; only pay for the lowercase copy when there are vars
+        val lower = if (variables.isEmpty()) emptyMap() else variables.entries.associate { it.key.lowercase() to it.value }
         return runCatching {
             val tokens = Tokenizer(expression).tokenize()
             val node = Parser(tokens).parse()

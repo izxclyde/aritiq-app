@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.shareExport
 import com.aritiq.calcnote.ui.settings.SettingsViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -116,7 +118,17 @@ fun rememberExportWithPassword(
     fun doExport(password: String) {
         val json = pendingJson
         if (json != null) {
-            shareEncryptedExport(context, json, password, encryptionService)
+            // PBKDF2 at 310k iterations blocks for seconds on a slow device; never on the UI thread.
+            scope.launch {
+                shareEncryptedExport(context, json, password, encryptionService)
+                showPasswordDialog = false
+                showSaveDialog = false
+                passwordError = null
+                pendingJson = null
+                pendingPassword = null
+                onDone()
+            }
+            return
         }
         showPasswordDialog = false
         showSaveDialog = false
@@ -186,13 +198,13 @@ fun rememberExportWithPassword(
     return ::start
 }
 
-private fun shareEncryptedExport(
+private suspend fun shareEncryptedExport(
     context: Any,
     json: String,
     password: String,
     encryptionService: EncryptionService,
 ) {
-    val encrypted = encryptionService.encrypt(json, password)
+    val encrypted = withContext(Dispatchers.Default) { encryptionService.encrypt(json, password) }
     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val ts = "%04d%02d%02d-%02d%02d%02d".format(now.year, now.monthNumber, now.dayOfMonth, now.hour, now.minute, now.second)
     shareExport(context, encrypted, "application/octet-stream", "aritiq-export-$ts.aritiq")

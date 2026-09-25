@@ -13,8 +13,10 @@ class ExportService(
     private val json = Json { encodeDefaults = true }
 
     suspend fun exportAllJson(): String {
-        val notes = repo.all()
-            .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
+        val all = repo.all()
+        // one tag query for the whole library instead of one per note
+        val tagsByNote = repo.tagsForNotes(all.map { it.id })
+        val notes = all.map { NoteExport.fromDomain(it, tagsByNote[it.id].orEmpty()) }
         val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             .map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(
@@ -31,8 +33,9 @@ class ExportService(
     }
 
     suspend fun exportSelectedJson(noteIds: List<String>): String {
-        val notes = noteIds.mapNotNull { repo.getById(it) }
-            .map { NoteExport.fromDomain(it, repo.tagsForNote(it.id)) }
+        val selected = noteIds.mapNotNull { repo.getById(it) }
+        val tagsByNote = repo.tagsForNotes(selected.map { it.id })
+        val notes = selected.map { NoteExport.fromDomain(it, tagsByNote[it.id].orEmpty()) }
         val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
             .map { FolderExport.fromDomain(it) }
         val envelope = AritiqExport(

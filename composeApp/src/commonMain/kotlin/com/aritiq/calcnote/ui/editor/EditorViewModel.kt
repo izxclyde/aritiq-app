@@ -9,11 +9,15 @@ import com.aritiq.calcnote.domain.Note
 import com.aritiq.calcnote.domain.NoteProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
@@ -25,6 +29,17 @@ class EditorViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+    private var computeJob: Job? = null
+
+    // ponytail: fixed delay. Shorter feels laggy on the readout, longer delays the total.
+    private companion object { const val COMPUTE_DEBOUNCE_MS = 120L }
+
+    // The screen owns a remember{}-scoped VM, so its SupervisorJob would otherwise outlive
+    // every visit to the editor. Call when leaving.
+    fun cancel() {
+        computeJob?.cancel()
+        scope.cancel()
+    }
 
     fun open(noteId: String?) {
         scope.launch {
@@ -44,12 +59,24 @@ class EditorViewModel(
 
     fun updateText(text: String) {
         val current = _state.value
+        // Text and title update synchronously: the field is the source of truth and the title
+        // derivation is a single line scan.
         _state.value = current.copy(
             text = text,
             title = if (current.titleEdited) current.title else NoteProcessor.titleOf(text),
-            currentSum = NoteProcessor.liveTotal(text),
-            stats = NoteProcessor.stats(text),
         )
+        // liveTotal + stats re-parse the entire document (up to 3 parses per line), so they are
+        // debounced and run off the UI thread instead of blocking every keystroke.
+        computeJob?.cancel()
+        computeJob = scope.launch {
+            delay(COMPUTE_DEBOUNCE_MS)
+            val sum = withContext(Dispatchers.Default) { NoteProcessor.liveTotal(text) }
+            val stats = withContext(Dispatchers.Default) { NoteProcessor.stats(text) }
+            // drop the result if the user kept typing while we were computing
+            if (_state.value.text == text) {
+                _state.value = _state.value.copy(currentSum = sum, stats = stats)
+            }
+        }
     }
 
     fun setFolderId(folderId: String?) {
