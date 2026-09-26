@@ -51,6 +51,7 @@ import com.aritiq.calcnote.data.repository.NoteRepository
 import com.aritiq.calcnote.data.update.UpdateInfo
 import com.aritiq.calcnote.data.update.checkForUpdate
 import com.aritiq.calcnote.domain.Note
+import com.aritiq.calcnote.domain.NoteProcessor
 import com.aritiq.calcnote.lock.LockManager
 import com.aritiq.calcnote.ui.components.EmptyState
 import com.aritiq.calcnote.ui.components.UpdateAvailableDialog
@@ -59,6 +60,7 @@ import com.aritiq.calcnote.ui.navigation.Navigator
 import com.aritiq.calcnote.ui.navigation.Route
 import com.aritiq.calcnote.ui.settings.SettingsViewModel
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.datetime.Clock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +68,8 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
+
+private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,11 +102,20 @@ fun HomeScreen(navigator: Navigator) {
     var updateAvailable by remember { mutableStateOf<UpdateInfo?>(null) }
 
     LaunchedEffect(Unit) {
-        val info = withContext(Dispatchers.IO) { checkForUpdate() }
-        if (info != null) updateAvailable = info
+        // Check at most once a day; a version dismissed with "Later" stays dismissed (the
+        // manual check in Settings bypasses both). The timestamp is recorded before the
+        // network call so an offline attempt also counts toward the daily budget.
+        val lastCheck = settingsRepo.get("update_last_check_ms")?.toLongOrNull() ?: 0L
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) return@LaunchedEffect
+        settingsRepo.set("update_last_check_ms", now.toString())
+        val dismissedVersion = settingsRepo.get("update_dismissed_version")?.toIntOrNull()
+        val info = withContext(Dispatchers.IO) { checkForUpdate() } ?: return@LaunchedEffect
+        if (info.versionCode != dismissedVersion) updateAvailable = info
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(vm.snackbarHostState) },
         topBar = {
             if (state.isSelecting) {
                 TopAppBar(
@@ -241,7 +254,13 @@ fun HomeScreen(navigator: Navigator) {
         )
     }
 
-    UpdateAvailableDialog(update = updateAvailable, onDismiss = { updateAvailable = null })
+    UpdateAvailableDialog(update = updateAvailable, onDismiss = {
+        // "Later" — remember the version so the daily check stays quiet for it.
+        updateAvailable?.let { info ->
+            scope.launch { settingsRepo.set("update_dismissed_version", info.versionCode.toString()) }
+        }
+        updateAvailable = null
+    })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -259,26 +278,28 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
     when (state.viewMode) {
         ViewMode.SIMPLE_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
             items(state.searchResults, key = { it.id }) { note ->
-                SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
+                SwipeToArchive(note = note, onArchive = { vm.archiveWithUndo(note) }) {
                     NoteRowSimple(
                         note = note,
                         onOpen = { navigator.navigate(Route.Editor(note.id)) },
                         vm = vm,
                         selected = note.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[note.id],
                     )
                 }
             }
         }
         ViewMode.DETAILED_LIST -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
             items(state.searchResults, key = { it.id }) { note ->
-                SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
+                SwipeToArchive(note = note, onArchive = { vm.archiveWithUndo(note) }) {
                     NoteRowDetailed(
                         note = note,
                         onOpen = { navigator.navigate(Route.Editor(note.id)) },
                         vm = vm,
                         selected = note.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[note.id],
                     )
                 }
             }
@@ -297,6 +318,7 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
                     vm = vm,
                     selected = note.id in state.selectedIds,
                     isSelecting = state.isSelecting,
+                    total = state.totals[note.id],
                 )
             }
         }
@@ -314,6 +336,7 @@ private fun SearchResults(state: HomeViewModel.UiState, vm: HomeViewModel, navig
                     vm = vm,
                     selected = note.id in state.selectedIds,
                     isSelecting = state.isSelecting,
+                    total = state.totals[note.id],
                 )
             }
         }
@@ -337,25 +360,27 @@ private fun SimpleList(state: HomeViewModel.UiState, vm: HomeViewModel, navigato
             if (state.pinned.isNotEmpty()) {
                 item { SectionHeader("Pinned") }
                 items(state.pinned, key = { it.id }) { note ->
-                    SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
+                    SwipeToArchive(note = note, onArchive = { vm.archiveWithUndo(note) }) {
                         NoteRowSimple(
                             note = note,
                             onOpen = { navigator.navigate(Route.Editor(note.id)) },
                             vm = vm,
                             selected = note.id in state.selectedIds,
                             isSelecting = state.isSelecting,
+                            total = state.totals[note.id],
                         )
                     }
                 }
             }
             groupedItems(state, navigator, vm) { n, onOpen ->
-                SwipeToArchive(note = n, onArchive = { vm.archive(n) }) {
+                SwipeToArchive(note = n, onArchive = { vm.archiveWithUndo(n) }) {
                     NoteRowSimple(
                         note = n,
                         onOpen = onOpen,
                         vm = vm,
                         selected = n.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[n.id],
                     )
                 }
             }
@@ -381,25 +406,27 @@ private fun DetailedList(state: HomeViewModel.UiState, vm: HomeViewModel, naviga
             if (state.pinned.isNotEmpty()) {
                 item { SectionHeader("Pinned") }
                 items(state.pinned, key = { it.id }) { note ->
-                    SwipeToArchive(note = note, onArchive = { vm.archive(note) }) {
+                    SwipeToArchive(note = note, onArchive = { vm.archiveWithUndo(note) }) {
                         NoteRowDetailed(
                             note = note,
                             onOpen = { navigator.navigate(Route.Editor(note.id)) },
                             vm = vm,
                             selected = note.id in state.selectedIds,
                             isSelecting = state.isSelecting,
+                            total = state.totals[note.id],
                         )
                     }
                 }
             }
             groupedItems(state, navigator, vm) { n, onOpen ->
-                SwipeToArchive(note = n, onArchive = { vm.archive(n) }) {
+                SwipeToArchive(note = n, onArchive = { vm.archiveWithUndo(n) }) {
                     NoteRowDetailed(
                         note = n,
                         onOpen = onOpen,
                         vm = vm,
                         selected = n.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[n.id],
                     )
                 }
             }
@@ -442,7 +469,7 @@ private fun LazyListScope.archivedSection(
     item { ArchivedHeader(state, vm) }
     if (state.showArchived) {
         items(state.archived, key = { it.id + "_archived" }) { note ->
-            ArchivedNoteRow(note = note, onRestore = { vm.restore(note) }, onDelete = { vm.delete(note.id) }, onOpen = { navigator.navigate(Route.Editor(note.id)) })
+            ArchivedNoteRow(note = note, onRestore = { vm.restoreWithUndo(note) }, onDelete = { vm.delete(note.id) }, onOpen = { navigator.navigate(Route.Editor(note.id)) })
         }
     }
 }
@@ -460,7 +487,7 @@ private fun ArchivedSectionColumn(
         if (state.showArchived) {
             Column {
                 state.archived.forEach { note ->
-                    ArchivedNoteRow(note = note, onRestore = { vm.restore(note) }, onDelete = { vm.delete(note.id) }, onOpen = { navigator.navigate(Route.Editor(note.id)) })
+                    ArchivedNoteRow(note = note, onRestore = { vm.restoreWithUndo(note) }, onDelete = { vm.delete(note.id) }, onOpen = { navigator.navigate(Route.Editor(note.id)) })
                     HorizontalDivider()
                 }
             }
@@ -599,6 +626,7 @@ private fun SmallGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                         vm = vm,
                         selected = note.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[note.id],
                     )
                 }
             }
@@ -641,6 +669,7 @@ private fun LargeGrid(state: HomeViewModel.UiState, vm: HomeViewModel, navigator
                         vm = vm,
                         selected = note.id in state.selectedIds,
                         isSelecting = state.isSelecting,
+                        total = state.totals[note.id],
                     )
                 }
             }
@@ -661,6 +690,7 @@ private fun NoteRowSimple(
     vm: HomeViewModel,
     selected: Boolean,
     isSelecting: Boolean,
+    total: Double?,
 ) {
     Surface(
         modifier = Modifier
@@ -671,20 +701,54 @@ private fun NoteRowSimple(
             ),
         tonalElevation = 0.dp,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = if (isSelecting) 8.dp else 16.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = if (isSelecting) 8.dp else 16.dp, end = 16.dp),
+        ) {
             if (isSelecting) {
                 Checkbox(checked = selected, onCheckedChange = { vm.toggleSelection(note.id) })
             }
+            Column(modifier = Modifier.weight(1f).padding(vertical = 12.dp)) {
+                Text(
+                    text = note.title.ifBlank { "Untitled" },
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = contentSnippet(note),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
-                text = note.title.ifBlank { "Untitled" },
-                modifier = Modifier.padding(vertical = 12.dp),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
+                text = formatDate(note.createdAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            total?.let { total ->
+                Spacer(Modifier.width(10.dp))
+                TotalChip(total)
+            }
         }
     }
     HorizontalDivider()
 }
+
+/** Small accent Σ chip — shown only on notes whose content computes a non-zero total. */
+@Composable
+private fun TotalChip(total: Double) {
+    Text(
+        text = "Σ ${NoteProcessor.formatTotal(total)}",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+/** First content line that isn't the title itself, for card previews. */
+private fun contentSnippet(note: Note): String =
+    note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: ""
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -694,6 +758,7 @@ private fun NoteRowDetailed(
     vm: HomeViewModel,
     selected: Boolean,
     isSelecting: Boolean,
+    total: Double?,
 ) {
     ListItem(
         modifier = Modifier
@@ -725,7 +790,11 @@ private fun NoteRowDetailed(
             }
         },
         trailingContent = {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                total?.let { total ->
+                    TotalChip(total)
+                    Spacer(Modifier.width(4.dp))
+                }
                 IconButton(onClick = { vm.toggleFavorite(note) }) {
                     Icon(
                         if (note.favorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
@@ -754,6 +823,7 @@ private fun NoteCardSmall(
     vm: HomeViewModel?,
     selected: Boolean,
     isSelecting: Boolean,
+    total: Double?,
 ) {
     Card(
         modifier = Modifier
@@ -770,6 +840,10 @@ private fun NoteCardSmall(
             Text(note.title.ifBlank { "Untitled" }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            total?.let { total ->
+                Spacer(Modifier.height(4.dp))
+                TotalChip(total)
+            }
         }
     }
 }
@@ -783,6 +857,7 @@ private fun NoteCardLarge(
     vm: HomeViewModel?,
     selected: Boolean,
     isSelecting: Boolean,
+    total: Double?,
 ) {
     Card(
         modifier = Modifier
@@ -812,6 +887,10 @@ private fun NoteCardLarge(
             }
             Spacer(Modifier.height(8.dp))
             Text(note.content.lineSequence().firstOrNull { it.isNotBlank() && it.trim() != note.title } ?: "", maxLines = 4, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            total?.let { total ->
+                Spacer(Modifier.height(6.dp))
+                TotalChip(total)
+            }
         }
     }
 }

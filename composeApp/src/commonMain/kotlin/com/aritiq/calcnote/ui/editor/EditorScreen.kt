@@ -2,6 +2,7 @@ package com.aritiq.calcnote.ui.editor
 
 import androidx.activity.compose.BackHandler
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -20,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -42,15 +45,17 @@ import org.koin.compose.koinInject
 /**
  * Editor body. Plain multiline text, monospace.
  *
- *  - The editable text is the single source of truth. We never rewrite it during typing, so
- *    the IME/keyboard never resets.
+ *  - The editable text is the single source of truth for everything at/under the cursor. The
+ *    only programmatic rewrite is a stale filled total (`total = old`) when the user edits
+ *    strictly above that line ([NoteProcessor.refreshFilledTotal]) — the cursor region is
+ *    never touched, so the IME/keyboard stays stable.
  *  - When the note's last non-empty line is a total trigger (`total` or `total =`), a separate
  *    NON-editable `Text` renders `total = <live sum>` directly under it — same font, same left
  *    margin, same ruled paper — so it reads as the next line of the page while never living
  *    inside the user's text field. The number is always live (derived from [UiState.currentSum]).
- *  - Bare keyword (`total`) auto-appends `=` on commit; a filled `total = 6000` written by the
- *    user is left untouched.
- *  - The bottom status bar shows the live Σ and word/char count.
+ *  - The ruled paper is drawn from the text layout's real baselines, not a fixed spacing guess,
+ *    so lines and text stay aligned at any density or font scale.
+ *  - The bottom status bar shows the live Σ (tap to copy) and word/char count.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -208,6 +213,43 @@ fun EditorScreen(
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
+                // Ruled paper tracks the text layout's real baselines: per-line pixel rounding
+                // then cancels out instead of accumulating into drift on long notes.
+                var textLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                // Remembered so the Modifier chain isn't reallocated every recomposition. Safe
+                // despite capturing textLayout: the draw lambda reads that snapshot state, so the
+                // draw phase still invalidates whenever the layout changes.
+                val ruledPaper = remember {
+                    Modifier.drawBehind {
+                        val layout = textLayout ?: return@drawBehind
+                        val strokeW = 1.dp.toPx()
+                        val marginX = 40.dp.toPx()
+                        val pitch = if (layout.lineCount > 1) {
+                            val p = layout.getLineBaseline(1) - layout.getLineBaseline(0)
+                            if (p > 0f) p else 24.sp.toPx()
+                        } else {
+                            24.sp.toPx()
+                        }
+                        // Horizontal ruled lines — at each real text baseline
+                        var y = layout.getLineBaseline(0)
+                        while (y < size.height) {
+                            drawLine(
+                                color = Color(0xFFA0988E),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = strokeW,
+                            )
+                            y += pitch
+                        }
+                        // Vertical margin line
+                        drawLine(
+                            color = Color(0xFFC47070),
+                            start = Offset(marginX, 0f),
+                            end = Offset(marginX, size.height),
+                            strokeWidth = strokeW * 1.5f,
+                        )
+                    }
+                }
                 BoxWithConstraints(
                     modifier = ruledPaper
                         .fillMaxSize()
@@ -219,9 +261,18 @@ fun EditorScreen(
                             value = textFieldValue,
                             onValueChange = { v ->
                                 if (!hasSynced) return@BasicTextField
-                                textFieldValue = v
-                                vm.updateText(v.text)
+                                var applied = v
+                                // Live-refresh a stale filled total (`total = old`), but only
+                                // when the user is editing strictly above that line so the
+                                // cursor/IME region is never rewritten underneath them.
+                                val refresh = NoteProcessor.refreshFilledTotal(v.text)
+                                if (refresh != null && v.selection.end < refresh.fromIndex) {
+                                    applied = TextFieldValue(refresh.newContent, selection = v.selection)
+                                }
+                                textFieldValue = applied
+                                vm.updateText(applied.text)
                             },
+                            onTextLayout = { textLayout = it },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = this@BoxWithConstraints.maxHeight)
@@ -235,8 +286,8 @@ fun EditorScreen(
                             // Computed total renders as an indented sub-line under the keyword:
                             //   total
                             //         = 6000
-                            Text(
-                                text = "= ${formatTotal(state.currentSum)}",
+                    Text(
+                        "= ${NoteProcessor.formatTotal(state.currentSum)}",
                                 style = editorTextStyle().copy(
                                     color = paperColorScheme().primary,
                                 ),
@@ -304,26 +355,43 @@ fun EditorScreen(
 
 @Composable
 private fun StatusBar(state: EditorViewModel.UiState) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(1600)
+            copied = false
+        }
+    }
     Surface(tonalElevation = 1.dp, color = paperColorScheme().surfaceContainerHigh) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Σ ${formatTotal(state.currentSum)}",
-                style = MaterialTheme.typography.titleSmall,
-                color = paperColorScheme().primary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Σ ${NoteProcessor.formatTotal(state.currentSum)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = paperColorScheme().primary,
+                    modifier = Modifier.clickable {
+                        clipboard.setText(AnnotatedString(NoteProcessor.formatTotal(state.currentSum)))
+                        copied = true
+                    },
+                )
+                if (copied) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Copied",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = paperColorScheme().onSurfaceVariant,
+                    )
+                }
+            }
             Text(
                 "${state.stats.words}w · ${state.stats.characters}c",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
     }
-}
-
-private fun formatTotal(v: Double): String {
-    val rounded = "%.2f".format(v)
-    return if (rounded.endsWith(".00")) rounded.dropLast(3) else rounded
 }
