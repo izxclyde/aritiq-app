@@ -9,7 +9,14 @@ param([string]$Apk = "")
 
 . "$PSScriptRoot\ui.ps1"
 
-if (-not $Apk) { $Apk = Join-Path (Split-Path $PSScriptRoot -Parent) "composeApp\build\outputs\apk\debug\Aritiq-0.1.0-debug.apk" }
+$debugDir = Join-Path (Split-Path $PSScriptRoot -Parent) "composeApp\build\outputs\apk\debug"
+if (-not $Apk) {
+    # The APK name carries the version (Aritiq-<versionName>-debug.apk) and that version now moves
+    # with conventional commits, so glob the newest build instead of pinning one filename.
+    $found = Get-ChildItem (Join-Path $debugDir "Aritiq-*-debug.apk") -ErrorAction SilentlyContinue
+    if (-not $found) { throw "No debug APK in $debugDir - run .\gradlew :composeApp:assembleDebug first." }
+    $Apk = ($found | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
 
 Write-Host "device : $script:Serial"
 Write-Host "apk    : $Apk"

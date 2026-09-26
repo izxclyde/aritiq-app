@@ -36,7 +36,7 @@ actual fun checkForUpdate(): UpdateInfo? {
             if (conn.responseCode != 200) return null
             val release = Json { ignoreUnknownKeys = true }
                 .decodeFromString<Release>(conn.inputStream.bufferedReader().use { it.readText() })
-            val versionCode = release.tag_name.substringAfterLast('-').toIntOrNull() ?: return null
+            val versionCode = buildNumberFromTag(release.tag_name) ?: return null
             val apkUrl = release.assets.firstOrNull { it.browser_download_url.endsWith(".apk") }?.browser_download_url
                 ?: return null
             if (versionCode <= BuildConfig.VERSION_CODE) null else UpdateInfo(versionCode, apkUrl)
