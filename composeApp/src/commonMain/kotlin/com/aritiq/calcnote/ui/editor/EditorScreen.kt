@@ -3,6 +3,8 @@ package com.aritiq.calcnote.ui.editor
 import androidx.activity.compose.BackHandler
 import android.content.Context
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -423,10 +425,12 @@ fun EditorScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StatusBar(state: EditorViewModel.UiState) {
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
+    var showCheatSheet by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
         if (copied) {
             kotlinx.coroutines.delay(1600)
@@ -444,10 +448,15 @@ private fun StatusBar(state: EditorViewModel.UiState) {
                     "Σ ${NoteProcessor.formatTotal(state.currentSum)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = paperColorScheme().primary,
-                    modifier = Modifier.clickable {
-                        clipboard.setText(AnnotatedString(NoteProcessor.formatTotal(state.currentSum)))
-                        copied = true
-                    },
+                    modifier = Modifier.combinedClickable(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(NoteProcessor.formatTotal(state.currentSum)))
+                            copied = true
+                        },
+                        // Long-press for the grammar: tap is already spoken for by copy, and the
+                        // sample note can only point somewhere.
+                        onLongClick = { showCheatSheet = true },
+                    ),
                 )
                 if (copied) {
                     Spacer(Modifier.width(6.dp))
@@ -463,5 +472,64 @@ private fun StatusBar(state: EditorViewModel.UiState) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+    if (showCheatSheet) {
+        CheatSheetDialog(onDismiss = { showCheatSheet = false })
+    }
+}
+
+/**
+ * The calc grammar, in the order NoteProcessor actually parses it. Every example here is one the
+ * parser has a test for, so the sheet cannot drift into documenting syntax that does not work.
+ */
+@Composable
+private fun CheatSheetDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Syntax") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Plain text contributes nothing. These lines add up:",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                CheatRow("12.50", "a bare number")
+                CheatRow("milk 12.5", "a label then a number")
+                CheatRow("200 + 15%", "a whole-line expression")
+                CheatRow("sqrt(16)", "functions work")
+                CheatRow("grocery 1000 * 2", "arithmetic after a label")
+                CheatRow("Rent = 1200", "assign a name, reuse it below")
+                HorizontalDivider()
+                Text(
+                    "Close the note with a total line:",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                CheatRow("Total =", "sums everything above it")
+                CheatRow("total = 6000", "rewrites itself when the numbers change")
+                Text(
+                    "Closing keywords: " + NoteProcessor.totalKeywords.joinToString(", "),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Got it") }
+        },
+    )
+}
+
+@Composable
+private fun CheatRow(example: String, description: String) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Text(
+            example,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = editorTextStyle().fontFamily),
+            color = paperColorScheme().primary,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(description, style = MaterialTheme.typography.bodySmall)
     }
 }
