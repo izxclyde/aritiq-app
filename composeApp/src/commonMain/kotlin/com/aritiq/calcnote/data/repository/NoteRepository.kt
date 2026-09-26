@@ -21,4 +21,9 @@ interface NoteRepository {
     suspend fun tagsForNote(noteId: String): List<String>
     /** All tags for [noteIds] in one query, keyed by note id. Avoids an N+1 when exporting. */
     suspend fun tagsForNotes(noteIds: List<String>): Map<String, List<String>>
+    /** Replaces [noteId]'s tags with [tags]. Blanks are dropped, duplicates collapsed, existing kept. */
+    suspend fun setTags(noteId: String, tags: List<String>)
+    /** Every tag in use, alphabetical. Powers the home filter chips. */
+    suspend fun allTags(): List<String>
+    suspend fun selectByTag(tag: String): List<Note>
 }

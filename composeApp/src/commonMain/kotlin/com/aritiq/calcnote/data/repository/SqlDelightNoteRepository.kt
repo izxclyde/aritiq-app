@@ -127,6 +127,34 @@ class SqlDelightNoteRepository(
         }
     }
 
+    override suspend fun setTags(noteId: String, tags: List<String>) {
+        withContext(Dispatchers.IO) {
+            val wanted = tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            val current = db.tagQueries.tagsForNote(noteId).executeAsList().map { it.name }.toSet()
+            for (name in current - wanted.toSet()) {
+                db.tagQueries.unlinkNoteTag(noteId, name)
+            }
+            for (name in wanted) {
+                if (name in current) continue
+                // A tag's id is its name: `tag.name` is UNIQUE, so this needs no id generator and
+                // turns every name lookup into selectById. Renaming a tag is a future concern and
+                // would need the id decoupled from the name.
+                if (db.tagQueries.selectById(name).executeAsOneOrNull() == null) {
+                    db.tagQueries.insertOrReplace(id = name, name = name, createdAt = now())
+                }
+                db.tagQueries.linkNoteTag(noteId, name)
+            }
+        }
+    }
+
+    override suspend fun allTags(): List<String> = withContext(Dispatchers.IO) {
+        db.tagQueries.selectAll().executeAsList().map { it.name }
+    }
+
+    override suspend fun selectByTag(tag: String): List<Note> = withContext(Dispatchers.IO) {
+        db.noteQueries.selectByTag(tag).executeAsList().map(::toDomain)
+    }
+
     private fun toDomain(row: NoteRow): Note = Note(
         id = row.id,
         title = row.title,
