@@ -30,6 +30,27 @@ import kotlinx.datetime.Clock
 // ponytail: fixed, not tunable. Raise only if search feels laggy on a large library.
 private const val SEARCH_DEBOUNCE_MS = 250L
 
+private const val SAMPLE_NOTE_ID = "sample-welcome"
+private const val SAMPLE_SEEDED_KEY = "sample_note_seeded"
+
+// Every number in here is inside the Groceries block on purpose: the prose lines must stay
+// digit-free or they would leak into the running sum the note is demonstrating. SampleNoteTest
+// pins that down. The "Total =" line has to come last -- isTotalTriggerLine only fires on the
+// final non-blank line, so a stray sentence after it hides the readout this note exists to show.
+internal const val SAMPLE_CONTENT = """Welcome to Aritiq
+
+This is an ordinary note. Write anything you like, it is just text.
+
+The calculator is a bonus. Put numbers on their own lines, add a
+"Total =" line at the end, and the sum appears below. Long-press the
+sigma in the bottom bar for the full syntax.
+
+Groceries
+Milk 12.5
+Bread 6
+Chicken 22.5
+Total ="""
+
 class HomeViewModel(
     private val repo: NoteRepository,
     private val settingsRepo: SettingsRepository,
@@ -54,14 +75,16 @@ class HomeViewModel(
     fun load() {
         scope.launch {
             recentJob?.cancel()
+            seedSampleNoteOnce()
             val pinned = repo.pinned().filter { it.folderId != LOCKED_FOLDER_ID }
             val archived = repo.archived().filter { it.folderId != LOCKED_FOLDER_ID }
             val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
+            val tags = repo.allTags()
             val vm = ViewMode.fromString(settingsRepo.get("viewMode") ?: "")
             val so = SortOrder.fromString(settingsRepo.get("sortOrder") ?: "")
             _state.value = _state.value.copy(
                 viewMode = vm, sortOrder = so, archived = archived,
-                folders = folders,
+                folders = folders, allTags = tags,
             )
             recentJob = repo.recent(50, 0)
                 .map { list -> list.filter { it.folderId != LOCKED_FOLDER_ID } }
@@ -81,29 +104,79 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Folder and tag are two views of the same list, so only one can be active: picking either
+     * clears the other, and "All" clears both. Folding them into an orthogonal pair would need
+     * every path below to re-filter on the other axis.
+     */
+    /**
+     * Creates one editable example note the first time the app runs, so the calc grammar is
+     * discoverable without a tutorial. The flag lives in Setting.sq because "has the user seen the
+     * sample" is app state, not note data. A fixed id makes the insert idempotent, and the flag is
+     * left set when the note is deleted, so deleting the sample really does get rid of it.
+     */
+    private suspend fun seedSampleNoteOnce() {
+        if (settingsRepo.get(SAMPLE_SEEDED_KEY) == "true") return
+        if (repo.getById(SAMPLE_NOTE_ID) == null) {
+            val now = Clock.System.now()
+            repo.upsert(
+                Note(
+                    id = SAMPLE_NOTE_ID,
+                    title = "Welcome to Aritiq",
+                    content = SAMPLE_CONTENT,
+                    createdAt = now,
+                    updatedAt = now,
+                    isPinned = false,
+                    isArchived = false,
+                    favorite = false,
+                    folderId = null,
+                )
+            )
+        }
+        settingsRepo.set(SAMPLE_SEEDED_KEY, "true")
+    }
+
     fun selectFolder(folderId: String?) {
         recentJob?.cancel()
-        _state.value = _state.value.copy(selectedFolderId = folderId)
-        if (_state.value.query.isNotBlank()) {
-            onSearch(_state.value.query)
+        _state.value = _state.value.copy(selectedFolderId = folderId, selectedTag = null)
+        applyFilters()
+    }
+
+    fun selectTag(tag: String?) {
+        recentJob?.cancel()
+        _state.value = _state.value.copy(selectedTag = tag, selectedFolderId = null)
+        applyFilters()
+    }
+
+    /** Re-runs whichever filter is active, or reloads the unfiltered list. */
+    private fun applyFilters() {
+        val s = _state.value
+        if (s.query.isNotBlank()) {
+            onSearch(s.query)
             return
         }
-        if (folderId == null) {
-            load()
+        val tag = s.selectedTag
+        val folder = s.selectedFolderId
+        if (tag != null) {
+            scope.launch { showFiltered(repo.selectByTag(tag)) }
+        } else if (folder != null) {
+            scope.launch { showFiltered(repo.selectByFolder(folder)) }
         } else {
-            scope.launch {
-                val notes = repo.selectByFolder(folderId)
-                val so = _state.value.sortOrder
-                val sorted = sort(notes, so)
-                val grouped = if (so == SortOrder.ALPHABETICAL) {
-                    sorted.map { GroupedItem.NoteItem(it) }
-                } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
-                _state.value = _state.value.copy(
-                    recent = sorted, pinned = emptyList(), archived = emptyList(),
-                    sortedGroupedRecent = grouped, totals = totalsFor(notes), loading = false,
-                )
-            }
+            load()
         }
+    }
+
+    /** A filtered view shows no pinned section and no archive, so both are dropped. */
+    private suspend fun showFiltered(notes: List<Note>) {
+        val so = _state.value.sortOrder
+        val sorted = sort(notes, so)
+        val grouped = if (so == SortOrder.ALPHABETICAL) {
+            sorted.map { GroupedItem.NoteItem(it) }
+        } else groupByMonth(sorted, so == SortOrder.OLDEST_FIRST)
+        _state.value = _state.value.copy(
+            recent = sorted, pinned = emptyList(), archived = emptyList(),
+            sortedGroupedRecent = grouped, totals = totalsFor(notes), loading = false,
+        )
     }
 
     fun setViewMode(mode: ViewMode) {
@@ -127,11 +200,7 @@ class HomeViewModel(
     fun onSearch(q: String) {
         _state.value = _state.value.copy(query = q)
         if (q.isBlank()) {
-            if (_state.value.selectedFolderId != null) {
-                selectFolder(_state.value.selectedFolderId)
-            } else {
-                load()
-            }
+            applyFilters()
             return
         }
         // Debounced, and the previous search is cancelled: the old code ran a full-table
@@ -245,8 +314,7 @@ class HomeViewModel(
     }
 
     private fun reload() {
-        val fid = _state.value.selectedFolderId
-        if (fid != null) selectFolder(fid) else load()
+        applyFilters()
     }
 
     fun toggleSelectMode() {
@@ -299,6 +367,8 @@ class HomeViewModel(
         val selectedIds: Set<String> = emptySet(),
         val folders: List<Folder> = emptyList(),
         val selectedFolderId: String? = null,
+        val allTags: List<String> = emptyList(),
+        val selectedTag: String? = null,
         val totals: Map<String, Double> = emptyMap(),
     )
 }

@@ -29,6 +29,7 @@ import androidx.activity.compose.BackHandler
 import com.aritiq.calcnote.appVersion
 import com.aritiq.calcnote.isDebugBuild
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.aritiq.calcnote.data.export.CorruptExportException
 import com.aritiq.calcnote.data.export.EncryptionService
 import com.aritiq.calcnote.data.export.ImportMode
 import com.aritiq.calcnote.data.update.UpdateInfo
@@ -79,7 +80,7 @@ fun SettingsScreen(navigator: Navigator) {
 
     fun handleDecryptedContent(content: String?) {
         if (content == null) {
-            vm.importResult("Could not decrypt file")
+            vm.importResult("Could not read the file")
         } else if (content.isBlank()) {
             vm.importResult("File is empty")
         } else {
@@ -385,8 +386,14 @@ fun SettingsScreen(navigator: Navigator) {
             onConfirm = { password ->
                 val bytes = pendingImportBytes
                 if (bytes != null) {
+                    // A damaged file and a wrong password are different problems with different
+                    // fixes, so they get different messages. Everything else (an AEAD auth
+                    // failure) is the password: GCM cannot tell a wrong key from a tampered file.
                     val decrypted = try {
                         encryptionService.decrypt(bytes, password)
+                    } catch (e: CorruptExportException) {
+                        importPasswordError = "This file is damaged or is not an Aritiq export"
+                        return@ExportPasswordDialog
                     } catch (e: Exception) {
                         null
                     }

@@ -81,6 +81,34 @@ class SqlDelightNoteRepositoryTest {
         assertEquals("n", hits[0].id)
     }
 
+    @Test fun plain_number_finds_a_grouped_amount() = runBlocking {
+        repo.upsert(note("n", "Rent 1,500"))
+        assertEquals(listOf("n"), repo.search("1500").map { it.id })
+    }
+
+    @Test fun grouped_number_finds_a_plain_amount() = runBlocking {
+        repo.upsert(note("n", "Rent 1500"))
+        assertEquals(listOf("n"), repo.search("1,500").map { it.id })
+    }
+
+    @Test fun decimal_search_ignores_the_point() = runBlocking {
+        repo.upsert(note("n", "Milk 12.50"))
+        assertEquals(listOf("n"), repo.search("12.5").map { it.id })
+    }
+
+    @Test fun separator_only_query_does_not_match_everything() = runBlocking {
+        repo.upsert(note("n", "Rent 1500"))
+        // "." strips to the empty string, and an empty needle would match the whole library.
+        // Matching prose that literally contains a period is correct; matching "Rent 1500" is not.
+        assertEquals(emptyList(), repo.search("."))
+        assertEquals(emptyList(), repo.search(","))
+    }
+
+    @Test fun word_query_is_unaffected_by_the_number_branch() = runBlocking {
+        repo.upsert(note("n", "Rent 1,500"))
+        assertEquals(emptyList(), repo.search("zebra"))
+    }
+
     @Test fun archive_hides_from_recent() = runBlocking {
         repo.upsert(note("a", "first"))
         repo.upsert(note("b", "second"))
@@ -135,6 +163,61 @@ class SqlDelightNoteRepositoryTest {
         repo.upsert(n)
         val total = NoteProcessor.liveTotal(repo.getById("v")!!.content)
         assertEquals(1440.0, total, 1e-6)
+    }
+
+    // ---- tags ---------------------------------------------------------------------------------
+
+    @Test fun set_tags_links_and_reads_back() = runBlocking {
+        repo.upsert(note("n", "Bills"))
+        repo.setTags("n", listOf("money", "urgent"))
+        assertEquals(listOf("money", "urgent"), repo.tagsForNote("n"))
+    }
+
+    @Test fun set_tags_drops_blanks_and_duplicates() = runBlocking {
+        repo.upsert(note("n", "Bills"))
+        repo.setTags("n", listOf("money", "  ", "money", " money "))
+        assertEquals(listOf("money"), repo.tagsForNote("n"))
+    }
+
+    @Test fun set_tags_replaces_rather_than_appends() = runBlocking {
+        repo.upsert(note("n", "Bills"))
+        repo.setTags("n", listOf("money", "urgent"))
+        repo.setTags("n", listOf("money", "later"))
+        assertEquals(listOf("later", "money"), repo.tagsForNote("n").sorted())
+    }
+
+    @Test fun set_tags_keeps_a_tag_shared_between_notes() = runBlocking {
+        repo.upsert(note("a", "One"))
+        repo.upsert(note("b", "Two"))
+        repo.setTags("a", listOf("shared"))
+        repo.setTags("b", listOf("shared", "solo"))
+        repo.setTags("a", emptyList())
+        // Unlinking from a must not orphan the tag on b.
+        assertEquals(listOf("shared", "solo"), repo.tagsForNote("b"))
+        assertEquals(emptyList(), repo.tagsForNote("a"))
+    }
+
+    @Test fun all_tags_are_unique_and_sorted() = runBlocking {
+        repo.upsert(note("a", "One"))
+        repo.upsert(note("b", "Two"))
+        repo.setTags("a", listOf("zeta", "alpha"))
+        repo.setTags("b", listOf("alpha"))
+        assertEquals(listOf("alpha", "zeta"), repo.allTags())
+    }
+
+    @Test fun select_by_tag_returns_only_tagged_notes() = runBlocking {
+        repo.upsert(note("a", "One"))
+        repo.upsert(note("b", "Two"))
+        repo.setTags("a", listOf("money"))
+        repo.setTags("b", listOf("work"))
+        assertEquals(listOf("a"), repo.selectByTag("money").map { it.id })
+    }
+
+    @Test fun select_by_tag_hides_archived_notes() = runBlocking {
+        repo.upsert(note("a", "One"))
+        repo.setTags("a", listOf("money"))
+        repo.setArchived("a", true)
+        assertEquals(emptyList(), repo.selectByTag("money"))
     }
 
     private fun assertEquals(expected: Double, actual: Double, tolerance: Double) {

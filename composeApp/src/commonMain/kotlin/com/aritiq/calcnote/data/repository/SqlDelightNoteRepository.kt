@@ -46,9 +46,26 @@ class SqlDelightNoteRepository(
         }
     }
 
+    /**
+     * Substring search, plus a second pass that ignores digit grouping so "1500" finds "1,500".
+     * Notes are typed by hand and both spellings end up in the same library.
+     *
+     * The grouped pass cannot be a SQL expression -- SQLDelight's grammar will not accept REPLACE
+     * on the left of LIKE, because REPLACE is its own keyword for INSERT OR REPLACE. So the
+     * candidates are prefetched with a single-digit LIKE (a digit is the one substring guaranteed
+     * to survive grouping) and compared in memory. That keeps the scan off the full table, which
+     * is the whole point of the debounce in HomeViewModel.
+     */
     override suspend fun search(query: String): List<Note> {
         return withContext(Dispatchers.IO) {
-            db.noteQueries.searchByText(query).executeAsList().map(::toDomain)
+            val byText = db.noteQueries.searchByText(query).executeAsList()
+            val needle = groupedNeedle(query)
+            if (needle == null) return@withContext byText.map(::toDomain)
+            val candidates = db.noteQueries.searchByText(needle.first().toString()).executeAsList()
+            val extra = candidates.filter {
+                stripSeparators(it.content).contains(needle) || stripSeparators(it.title).contains(needle)
+            }
+            (byText + extra).distinctBy { it.id }.map(::toDomain)
         }
     }
 
@@ -112,6 +129,20 @@ class SqlDelightNoteRepository(
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
+    /**
+     * The separator-free form of [query] when the query is a bare number, else null.
+     *
+     * Fires for plain digit strings too, not just grouped ones: "1500" has to reach "1,500", and
+     * the plain LIKE is exactly what fails to make that hop. Needs at least one digit left after
+     * stripping -- a bare "." strips to empty, and an empty needle matches every note.
+     */
+    private fun groupedNeedle(query: String): String? {
+        if (query.isEmpty() || !query.all { it.isDigit() || it == ',' || it == '.' }) return null
+        return stripSeparators(query).takeIf { it.isNotEmpty() }
+    }
+
+    private fun stripSeparators(s: String): String = s.replace(",", "").replace(".", "")
+
     override suspend fun tagsForNote(noteId: String): List<String> {
         return withContext(Dispatchers.IO) {
             db.tagQueries.tagsForNote(noteId).executeAsList().map { it.name }
@@ -125,6 +156,34 @@ class SqlDelightNoteRepository(
                 .executeAsList()
                 .groupBy({ it.note_id }, { it.name })
         }
+    }
+
+    override suspend fun setTags(noteId: String, tags: List<String>) {
+        withContext(Dispatchers.IO) {
+            val wanted = tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            val current = db.tagQueries.tagsForNote(noteId).executeAsList().map { it.name }.toSet()
+            for (name in current - wanted.toSet()) {
+                db.tagQueries.unlinkNoteTag(noteId, name)
+            }
+            for (name in wanted) {
+                if (name in current) continue
+                // A tag's id is its name: `tag.name` is UNIQUE, so this needs no id generator and
+                // turns every name lookup into selectById. Renaming a tag is a future concern and
+                // would need the id decoupled from the name.
+                if (db.tagQueries.selectById(name).executeAsOneOrNull() == null) {
+                    db.tagQueries.insertOrReplace(id = name, name = name, createdAt = now())
+                }
+                db.tagQueries.linkNoteTag(noteId, name)
+            }
+        }
+    }
+
+    override suspend fun allTags(): List<String> = withContext(Dispatchers.IO) {
+        db.tagQueries.selectAll().executeAsList().map { it.name }
+    }
+
+    override suspend fun selectByTag(tag: String): List<Note> = withContext(Dispatchers.IO) {
+        db.noteQueries.selectByTag(tag).executeAsList().map(::toDomain)
     }
 
     private fun toDomain(row: NoteRow): Note = Note(

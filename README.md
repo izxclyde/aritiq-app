@@ -91,9 +91,12 @@ Install the debug APK on a device to test the editor UX (keyboard stability, swi
 Aritiq is distributed free as signed APKs via **GitHub Releases** (no Play Store).
 
 - Every push to `main` triggers `.github/workflows/release.yml` on the self-hosted
-  `aritiq` runner (Docker image `compscidr/github-runner-android:jdk17`), which builds a
-  signed release APK, computes `versionCode` from git commit count, and creates a release
-  `v0.1.0-<N>` with the APK attached.
+  `aritiq` runner (Docker image `compscidr/github-runner-android:jdk17`). The workflow reads
+  the conventional commits made since the last release tag and bumps the semver base from
+  them (`feat` → minor, `fix`/`perf`/`revert` → patch, `!` or `BREAKING CHANGE` → major), then
+  builds a signed release APK and creates a release `v<base>-<commit count>`. The commit count
+  is also the Android `versionCode`, so it only ever increases. A push with nothing worth
+  releasing (`docs`, `chore`, `ci`, merges) is skipped rather than tagged.
 - **In-app updates**: the app silently checks `releases/latest` on launch and shows a
   "Check for updates" button in Settings. If a newer `versionCode` exists, it offers to
   download and install the APK.

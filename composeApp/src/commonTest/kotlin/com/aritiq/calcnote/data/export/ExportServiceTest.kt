@@ -51,6 +51,15 @@ class InMemoryNoteRepo : NoteRepository {
         tagsForNotesCalls++
         return noteIds.mapNotNull { id -> tagMap[id]?.let { id to it } }.toMap()
     }
+
+    override suspend fun setTags(noteId: String, tags: List<String>) {
+        tagMap[noteId] = tags
+    }
+
+    override suspend fun allTags(): List<String> = tagMap.values.flatten().distinct().sorted()
+
+    override suspend fun selectByTag(tag: String): List<Note> =
+        notes.filter { tagMap[it.id]?.contains(tag) == true }
 }
 
 class InMemoryFolderRepo : FolderRepository {

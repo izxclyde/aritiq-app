@@ -1,7 +1,15 @@
 package com.aritiq.calcnote.data.export
 
-class EncryptionService {
-    fun encrypt(plaintext: String, password: String): ByteArray = encryptImpl(plaintext, password)
+/**
+ * The file is not a well-formed Aritiq export: truncated, or missing the header entirely.
+ * Distinct from a failed decryption, which almost always means the password is wrong -- AEAD
+ * cannot tell a wrong key from a tampered payload, so that case stays reported as a password
+ * problem. Named rather than an IllegalArgumentException so the import UI can say which it hit
+ * instead of showing "Wrong password" for a file no password could ever open.
+ */
+class CorruptExportException(message: String) : Exception(message)
+
+class EncryptionService {    fun encrypt(plaintext: String, password: String): ByteArray = encryptImpl(plaintext, password)
     fun decrypt(ciphertext: ByteArray, password: String): String = decryptImpl(ciphertext, password)
     fun encryptWithKey(plaintext: String, key: ByteArray): ByteArray = encryptWithKeyImpl(plaintext, key)
     fun decryptWithKey(ciphertext: ByteArray, key: ByteArray): String = decryptWithKeyImpl(ciphertext, key)

@@ -44,13 +44,38 @@ class EditorViewModel(
     fun open(noteId: String?) {
         scope.launch {
             val folders = folderRepo.all().filter { it.id != LOCKED_FOLDER_ID }
+            val allTags = repo.allTags()
             if (noteId == null) {
-                _state.value = UiState(loaded = true, folders = folders)
+                _state.value = UiState(loaded = true, folders = folders, allTags = allTags)
             } else {
                 val note = repo.getById(noteId)
-                _state.value = if (note != null) UiState.from(note).copy(loaded = true, folders = folders) else UiState(loaded = true, folders = folders)
+                val tags = repo.tagsForNote(noteId)
+                _state.value = if (note != null) {
+                    UiState.from(note).copy(loaded = true, folders = folders, allTags = allTags, tags = tags)
+                } else {
+                    UiState(loaded = true, folders = folders, allTags = allTags)
+                }
             }
         }
+    }
+
+    /**
+     * Toggles one tag in the draft. Tags live in note_tag rather than on the note row, so they are
+     * written in [save] alongside everything else: a brand-new note has no id to link against yet,
+     * and the editor already treats back-and-save as the commit point.
+     */
+    fun toggleTag(name: String) {
+        val tag = name.trim()
+        if (tag.isEmpty()) return
+        val current = _state.value.tags
+        _state.value = _state.value.copy(
+            tags = if (tag in current) current - tag else current + tag,
+            allTags = if (tag in current || tag in _state.value.allTags) {
+                _state.value.allTags
+            } else {
+                (_state.value.allTags + tag).sorted()
+            },
+        )
     }
 
     fun updateTitle(newTitle: String) {
@@ -109,6 +134,9 @@ class EditorViewModel(
             folderId = s.folderId,
         )
         repo.upsert(note)
+        // Unconditional: an empty list is how a user removes the last tag, and setTags unlinks
+        // whatever is left. Guarding this on isNotEmpty would strand the old links.
+        repo.setTags(id, s.tags)
         _state.value = s.copy(id = id, createdAt = note.createdAt, updatedAt = note.updatedAt)
         return id
     }
@@ -135,6 +163,8 @@ class EditorViewModel(
         val isPinned: Boolean = false,
         val folderId: String? = null,
         val folders: List<Folder> = emptyList(),
+        val tags: List<String> = emptyList(),
+        val allTags: List<String> = emptyList(),
         val currentSum: Double = 0.0,
         val stats: NoteProcessor.Stats = NoteProcessor.Stats(0, 0),
         val loaded: Boolean = false,

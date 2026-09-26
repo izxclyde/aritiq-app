@@ -80,7 +80,9 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = (project.findProperty("android.versionCodeOverride") as String?)?.toIntOrNull() ?: 1
-        versionName = "0.1.0"
+        // Release builds pass the semver base the release workflow derived from conventional commits,
+        // e.g. "0.2.0-54". Local builds keep the fallback; update checks are disabled in debug.
+        versionName = (project.findProperty("android.versionNameOverride") as String?) ?: "0.1.0"
     }
 
     signingConfigs {
