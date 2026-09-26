@@ -215,6 +215,7 @@ fun HomeScreen(navigator: Navigator) {
             )
 
             FolderChipRow(state, vm)
+            TagChipRow(state, vm)
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (state.query.isNotBlank()) {
@@ -926,6 +927,33 @@ private fun LockedRow(lockManager: LockManager, navigator: Navigator) {
 @Composable
 private fun FolderChipRow(state: HomeViewModel.UiState, vm: HomeViewModel) {
     if (state.folders.isEmpty()) return
+    FilterChipRow(
+        items = state.folders.map { it.id to it.name },
+        selected = state.selectedFolderId,
+        onSelect = { vm.selectFolder(it) },
+        onClear = { vm.selectFolder(null) },
+    )
+}
+
+@Composable
+private fun TagChipRow(state: HomeViewModel.UiState, vm: HomeViewModel) {
+    if (state.allTags.isEmpty()) return
+    FilterChipRow(
+        items = state.allTags.map { it to it },
+        selected = state.selectedTag,
+        onSelect = { vm.selectTag(it) },
+        onClear = { vm.selectTag(null) },
+    )
+}
+
+/** Filter chips with a leading "All" that clears the filter. Shared by the folder and tag rows. */
+@Composable
+private fun FilterChipRow(
+    items: List<Pair<String, String>>,
+    selected: String?,
+    onSelect: (String) -> Unit,
+    onClear: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -939,16 +967,16 @@ private fun FolderChipRow(state: HomeViewModel.UiState, vm: HomeViewModel) {
             selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
         )
         FilterChip(
-            selected = state.selectedFolderId == null,
-            onClick = { vm.selectFolder(null) },
+            selected = selected == null,
+            onClick = onClear,
             label = { Text("All") },
             colors = chipColors,
         )
-        state.folders.forEach { folder ->
+        items.forEach { (id, label) ->
             FilterChip(
-                selected = state.selectedFolderId == folder.id,
-                onClick = { vm.selectFolder(folder.id) },
-                label = { Text(folder.name) },
+                selected = selected == id,
+                onClick = { onSelect(id) },
+                label = { Text(label) },
                 colors = chipColors,
             )
         }

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -86,6 +87,8 @@ fun EditorScreen(
     // position and IME state across recompositions (fixes keyboard reset bug).
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showFolderMenu by remember { mutableStateOf(false) }
+    var showTagMenu by remember { mutableStateOf(false) }
+    var showCreateTagDialog by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var textFieldValue by remember(noteId) { mutableStateOf(TextFieldValue("")) }
     var hasSynced by remember(noteId) { mutableStateOf(false) }
@@ -167,6 +170,44 @@ fun EditorScreen(
                             )
                         }
                     }
+                    }
+                    Box {
+                        IconButton(onClick = { showTagMenu = true }) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.Label,
+                                contentDescription = "Assign tags",
+                                tint = if (state.tags.isNotEmpty()) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            )
+                        }
+                        DropdownMenu(expanded = showTagMenu, onDismissRequest = { showTagMenu = false }) {
+                            if (state.allTags.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No tags yet") },
+                                    onClick = {},
+                                )
+                            }
+                            state.allTags.forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag) },
+                                    trailingIcon = if (tag in state.tags) {
+                                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                    } else null,
+                                    onClick = { vm.toggleTag(tag) },
+                                )
+                            }
+                            if (state.tags.isNotEmpty()) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Clear all tags") },
+                                    onClick = { state.tags.forEach { vm.toggleTag(it) } },
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("+ Create new tag") },
+                                onClick = { showTagMenu = false; showCreateTagDialog = true },
+                            )
+                        }
                     }
                     if (state.id != null) {
                         IconButton(onClick = { exportWithPassword() }) {
@@ -346,6 +387,35 @@ fun EditorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateFolderDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showCreateTagDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showCreateTagDialog = false },
+            title = { Text("New tag") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Tag name") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = { vm.toggleTag(name); showCreateTagDialog = false },
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateTagDialog = false }) {
                     Text("Cancel")
                 }
             },
