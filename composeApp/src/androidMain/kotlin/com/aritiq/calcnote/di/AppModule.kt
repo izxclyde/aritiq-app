@@ -14,12 +14,9 @@ import com.aritiq.calcnote.data.repository.SqlDelightNoteRepository
 import com.aritiq.calcnote.data.repository.SqlDelightSettingsRepository
 import com.aritiq.calcnote.lock.AndroidLockManager
 import com.aritiq.calcnote.lock.LockManager
-import com.aritiq.calcnote.ui.editor.EditorViewModel
 import com.aritiq.calcnote.ui.folders.ManageFoldersViewModel
-import com.aritiq.calcnote.ui.home.HomeViewModel
 import com.aritiq.calcnote.ui.settings.SettingsViewModel
 import org.koin.core.module.Module
-import org.koin.core.qualifier.qualifier
 import org.koin.dsl.module
 
 fun appModule(context: Context): Module = module {
@@ -33,10 +30,6 @@ fun appModule(context: Context): Module = module {
     single { ExportService(get(), get()) }
     single { ImportService(get(), get()) }
 
-    factory { HomeViewModel(get(), get(), get(), get(), get()) }
-    factory { EditorViewModel(get(), get(), get()) }
     factory { ManageFoldersViewModel(get()) }
     single { SettingsViewModel(get(), get(), get()) }
 }
-
-private fun appModuleQualifier() = qualifier("app")

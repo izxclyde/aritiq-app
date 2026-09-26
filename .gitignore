@@ -17,3 +17,7 @@ keystore/
 
 # Generated analysis
 graphify-out/
+
+# E2E run artifacts (screenshots / UI dumps). The harness scripts themselves are tracked.
+e2e/*.png
+e2e/*.xml

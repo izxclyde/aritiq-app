@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,9 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import kotlinx.datetime.Clock
+
+// ponytail: fixed, not tunable. Raise only if search feels laggy on a large library.
+private const val SEARCH_DEBOUNCE_MS = 250L
 
 class HomeViewModel(
     private val repo: NoteRepository,
@@ -37,6 +42,14 @@ class HomeViewModel(
     val state: StateFlow<UiState> = _state.asStateFlow()
     val snackbarHostState = SnackbarHostState()
     private var recentJob: Job? = null
+    private var searchJob: Job? = null
+
+    // Cancels the query listener, the search, and any in-flight load. Call when leaving the screen.
+    fun cancel() {
+        recentJob?.cancel()
+        searchJob?.cancel()
+        scope.cancel()
+    }
 
     fun load() {
         scope.launch {
@@ -121,7 +134,11 @@ class HomeViewModel(
             }
             return
         }
-        scope.launch {
+        // Debounced, and the previous search is cancelled: the old code ran a full-table
+        // LIKE '%q%' scan per keystroke and let racing searches land out of order.
+        searchJob?.cancel()
+        searchJob = scope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
             val results = repo.search(q).filter { it.folderId != LOCKED_FOLDER_ID }
             val folderId = _state.value.selectedFolderId
             val filtered = if (folderId != null) results.filter { it.folderId == folderId } else results

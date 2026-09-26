@@ -17,6 +17,12 @@ class InMemoryNoteRepo : NoteRepository {
     private val notes = mutableListOf<Note>()
     private val tagMap = mutableMapOf<String, List<String>>()
 
+    /** Call counters so tests can assert export doesn't regress into an N+1. */
+    var tagsForNoteCalls = 0
+        private set
+    var tagsForNotesCalls = 0
+        private set
+
     fun seed(note: Note, tags: List<String> = emptyList()) {
         notes.add(note)
         tagMap[note.id] = tags
@@ -35,7 +41,16 @@ class InMemoryNoteRepo : NoteRepository {
     override suspend fun setPinned(id: String, pinned: Boolean) {}
     override suspend fun setArchived(id: String, archived: Boolean) {}
     override suspend fun setFavorite(id: String, favorite: Boolean) {}
-    override suspend fun tagsForNote(noteId: String): List<String> = tagMap[noteId] ?: emptyList()
+
+    override suspend fun tagsForNote(noteId: String): List<String> {
+        tagsForNoteCalls++
+        return tagMap[noteId] ?: emptyList()
+    }
+
+    override suspend fun tagsForNotes(noteIds: List<String>): Map<String, List<String>> {
+        tagsForNotesCalls++
+        return noteIds.mapNotNull { id -> tagMap[id]?.let { id to it } }.toMap()
+    }
 }
 
 class InMemoryFolderRepo : FolderRepository {
@@ -56,6 +71,24 @@ class InMemoryFolderRepo : FolderRepository {
 class ExportServiceTest {
 
     private val now = Clock.System.now()
+
+    // Export used to call tagsForNote once per note (N+1); tagsForNotes is now the single source.
+    @Test fun export_batches_tag_lookup_into_one_call() = runTest {
+        val repo = InMemoryNoteRepo()
+        repo.seed(Note(id = "1", title = "A", content = "milk 5", createdAt = now, updatedAt = now), tags = listOf("shopping"))
+        repo.seed(Note(id = "2", title = "B", content = "bread 2", createdAt = now, updatedAt = now), tags = listOf("shopping", "weekly"))
+        repo.seed(Note(id = "3", title = "C", content = "eggs 3", createdAt = now, updatedAt = now), tags = listOf("food"))
+
+        val svc = ExportService(repo, InMemoryFolderRepo())
+        val json = svc.exportAllJson()
+
+        assertEquals(0, repo.tagsForNoteCalls, "per-note tag lookups should not happen during export")
+        assertEquals(1, repo.tagsForNotesCalls, "expected exactly one batched tag query")
+        // and the tags still land in the output
+        assertContains(json, "shopping")
+        assertContains(json, "weekly")
+        assertContains(json, "food")
+    }
 
     @Test fun export_all_json_includes_envelope() = runTest {
         val repo = InMemoryNoteRepo()

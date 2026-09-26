@@ -68,6 +68,8 @@ fun EditorScreen(
     val folderRepo = koinInject<FolderRepository>()
     val encryptionService = remember { EncryptionService() }
     val vm = remember { EditorViewModel(repo, exportService, folderRepo) }
+    // remember{}-scoped VM owns a SupervisorJob; without this every editor visit leaks a scope.
+    DisposableEffect(vm) { onDispose { vm.cancel() } }
     val context = androidx.compose.ui.platform.LocalContext.current
     val exportWithPassword = rememberExportWithPassword(
         settingsViewModel = koinInject<SettingsViewModel>(),
@@ -180,44 +182,79 @@ fun EditorScreen(
         bottomBar = { StatusBar(state) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // The ruled-paper drawBehind is remembered: an inline lambda allocates a new instance
+            // per recomposition, invalidating the draw layer and repainting every line per keystroke.
+            val ruledPaper = remember {
+                Modifier.drawBehind {
+                    val lineSpacing = 24.sp.toPx()
+                    val strokeW = 1.dp.toPx()
+                    val marginX = 40.dp.toPx()
+
+                    // Horizontal ruled lines — span full page width
+                    var y = lineSpacing * 0.75f
+                    while (y < size.height) {
+                        drawLine(
+                            color = Color(0xFFA0988E),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = strokeW,
+                        )
+                        y += lineSpacing
+                    }
+
+                    // Vertical margin line
+                    drawLine(
+                        color = Color(0xFFC47070),
+                        start = Offset(marginX, 0f),
+                        end = Offset(marginX, size.height),
+                        strokeWidth = strokeW * 1.5f,
+                    )
+                }
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
                 // Ruled paper tracks the text layout's real baselines: per-line pixel rounding
                 // then cancels out instead of accumulating into drift on long notes.
                 var textLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                // Remembered so the Modifier chain isn't reallocated every recomposition. Safe
+                // despite capturing textLayout: the draw lambda reads that snapshot state, so the
+                // draw phase still invalidates whenever the layout changes.
+                val ruledPaper = remember {
+                    Modifier.drawBehind {
+                        val layout = textLayout ?: return@drawBehind
+                        val strokeW = 1.dp.toPx()
+                        val marginX = 40.dp.toPx()
+                        val pitch = if (layout.lineCount > 1) {
+                            val p = layout.getLineBaseline(1) - layout.getLineBaseline(0)
+                            if (p > 0f) p else 24.sp.toPx()
+                        } else {
+                            24.sp.toPx()
+                        }
+                        // Horizontal ruled lines — at each real text baseline
+                        var y = layout.getLineBaseline(0)
+                        while (y < size.height) {
+                            drawLine(
+                                color = Color(0xFFA0988E),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = strokeW,
+                            )
+                            y += pitch
+                        }
+                        // Vertical margin line
+                        drawLine(
+                            color = Color(0xFFC47070),
+                            start = Offset(marginX, 0f),
+                            end = Offset(marginX, size.height),
+                            strokeWidth = strokeW * 1.5f,
+                        )
+                    }
+                }
                 BoxWithConstraints(
-                    modifier = Modifier
+                    modifier = ruledPaper
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
-                        .drawBehind {
-                            val layout = textLayout ?: return@drawBehind
-                            val strokeW = 1.dp.toPx()
-                            val marginX = 40.dp.toPx()
-                            val pitch = if (layout.lineCount > 1) {
-                                val p = layout.getLineBaseline(1) - layout.getLineBaseline(0)
-                                if (p > 0f) p else 24.sp.toPx()
-                            } else {
-                                24.sp.toPx()
-                            }
-                            // Horizontal ruled lines — at each real text baseline
-                            var y = layout.getLineBaseline(0)
-                            while (y < size.height) {
-                                drawLine(
-                                    color = Color(0xFFA0988E),
-                                    start = Offset(0f, y),
-                                    end = Offset(size.width, y),
-                                    strokeWidth = strokeW,
-                                )
-                                y += pitch
-                            }
-                            // Vertical margin line
-                            drawLine(
-                                color = Color(0xFFC47070),
-                                start = Offset(marginX, 0f),
-                                end = Offset(marginX, size.height),
-                                strokeWidth = strokeW * 1.5f,
-                            )
-                        },
+                        .padding(16.dp),
                 ) {
                     Column {
                         BasicTextField(

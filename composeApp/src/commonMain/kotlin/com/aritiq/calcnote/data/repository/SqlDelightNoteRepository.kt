@@ -118,6 +118,15 @@ class SqlDelightNoteRepository(
         }
     }
 
+    override suspend fun tagsForNotes(noteIds: List<String>): Map<String, List<String>> {
+        if (noteIds.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            db.tagQueries.tagsForNotes(noteIds)
+                .executeAsList()
+                .groupBy({ it.note_id }, { it.name })
+        }
+    }
+
     private fun toDomain(row: NoteRow): Note = Note(
         id = row.id,
         title = row.title,

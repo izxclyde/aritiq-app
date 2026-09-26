@@ -23,6 +23,9 @@ private data class Release(val tag_name: String = "", val assets: List<Asset> = 
 private data class Asset(val browser_download_url: String = "")
 
 actual fun checkForUpdate(): UpdateInfo? {
+    // Dev builds never check or prompt: a release versionCode always outranks a debug one, so the
+    // dialog would fire on every launch and offer to replace the APK you are testing with.
+    if (BuildConfig.DEBUG) return null
     return try {
         val conn = URL(LATEST_RELEASE_URL).openConnection() as HttpURLConnection
         try {

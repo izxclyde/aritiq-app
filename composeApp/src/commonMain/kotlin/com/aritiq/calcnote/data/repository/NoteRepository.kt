@@ -19,4 +19,6 @@ interface NoteRepository {
     suspend fun selectByFolder(folderId: String): List<Note>
     suspend fun selectByFolderExcluding(excludedId: String): List<Note>
     suspend fun tagsForNote(noteId: String): List<String>
+    /** All tags for [noteIds] in one query, keyed by note id. Avoids an N+1 when exporting. */
+    suspend fun tagsForNotes(noteIds: List<String>): Map<String, List<String>>
 }

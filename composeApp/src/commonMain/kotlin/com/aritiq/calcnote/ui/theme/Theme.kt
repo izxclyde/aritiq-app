@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -43,7 +44,10 @@ fun AritiqTheme(
     accent: NotebookAccent = NotebookAccent.TEAL,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) accent.dark else accent.light
+    // The accent getters build a fresh ColorScheme on every read; this one is read by every
+    // component, so it was re-allocated on each recomposition of the theme root.
+    val colorScheme = remember(darkTheme, accent) { if (darkTheme) accent.dark else accent.light }
+    // PaperTypography() is @Composable (Res.font.X lookups), so it cannot be wrapped in remember.
     val typography = PaperTypography()
     val shapes = PaperShapes
 

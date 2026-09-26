@@ -10,6 +10,13 @@ CREATE TABLE note (
   folder_id TEXT REFERENCES folder(id) ON DELETE SET NULL
 );
 
+-- Every filter/sort in this file is equality on a flag then updated_at, so index that shape.
+-- searchByText is intentionally absent: LIKE '%q%' cannot use an index (it is debounced instead).
+CREATE INDEX IF NOT EXISTS idx_note_recent ON note(is_archived, is_pinned, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_archived ON note(is_archived, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_folder ON note(folder_id, is_archived, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_note_updated ON note(updated_at DESC);
+
 selectById:
 SELECT * FROM note WHERE id = :id;
 

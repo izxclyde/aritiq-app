@@ -28,8 +28,10 @@ import org.koin.compose.koinInject
 @Composable
 fun ManageFoldersScreen(navigator: Navigator) {
     BackHandler { navigator.pop() }
-    val vm = koinInject<ManageFoldersViewModel>().also { it.load() }
+    val vm = koinInject<ManageFoldersViewModel>()
     val state by vm.state.collectAsState()
+    // load() hits the DB, so it must run once per entry, not on every recomposition
+    LaunchedEffect(Unit) { vm.load() }
     val scope = rememberCoroutineScope()
     var showCreateDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Folder?>(null) }
