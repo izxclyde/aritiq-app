@@ -46,9 +46,26 @@ class SqlDelightNoteRepository(
         }
     }
 
+    /**
+     * Substring search, plus a second pass that ignores digit grouping so "1500" finds "1,500".
+     * Notes are typed by hand and both spellings end up in the same library.
+     *
+     * The grouped pass cannot be a SQL expression -- SQLDelight's grammar will not accept REPLACE
+     * on the left of LIKE, because REPLACE is its own keyword for INSERT OR REPLACE. So the
+     * candidates are prefetched with a single-digit LIKE (a digit is the one substring guaranteed
+     * to survive grouping) and compared in memory. That keeps the scan off the full table, which
+     * is the whole point of the debounce in HomeViewModel.
+     */
     override suspend fun search(query: String): List<Note> {
         return withContext(Dispatchers.IO) {
-            db.noteQueries.searchByText(query).executeAsList().map(::toDomain)
+            val byText = db.noteQueries.searchByText(query).executeAsList()
+            val needle = groupedNeedle(query)
+            if (needle == null) return@withContext byText.map(::toDomain)
+            val candidates = db.noteQueries.searchByText(needle.first().toString()).executeAsList()
+            val extra = candidates.filter {
+                stripSeparators(it.content).contains(needle) || stripSeparators(it.title).contains(needle)
+            }
+            (byText + extra).distinctBy { it.id }.map(::toDomain)
         }
     }
 
@@ -111,6 +128,20 @@ class SqlDelightNoteRepository(
     }
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
+
+    /**
+     * The separator-free form of [query] when the query is a bare number, else null.
+     *
+     * Fires for plain digit strings too, not just grouped ones: "1500" has to reach "1,500", and
+     * the plain LIKE is exactly what fails to make that hop. Needs at least one digit left after
+     * stripping -- a bare "." strips to empty, and an empty needle matches every note.
+     */
+    private fun groupedNeedle(query: String): String? {
+        if (query.isEmpty() || !query.all { it.isDigit() || it == ',' || it == '.' }) return null
+        return stripSeparators(query).takeIf { it.isNotEmpty() }
+    }
+
+    private fun stripSeparators(s: String): String = s.replace(",", "").replace(".", "")
 
     override suspend fun tagsForNote(noteId: String): List<String> {
         return withContext(Dispatchers.IO) {

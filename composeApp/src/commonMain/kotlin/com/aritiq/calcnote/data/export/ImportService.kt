@@ -27,7 +27,9 @@ class ImportService(
         val envelope = try {
             json.decodeFromString(AritiqExport.serializer(), content)
         } catch (e: Exception) {
-            return ImportResult(0, 0, listOf("Invalid JSON: ${e.message}"))
+            // The parser's message ("Unexpected JSON token at offset 41") means nothing to
+            // someone who just picked the wrong file, and the offset differs per library.
+            return ImportResult(0, 0, listOf("This is not a valid Aritiq export"))
         }
 
         var imported = 0

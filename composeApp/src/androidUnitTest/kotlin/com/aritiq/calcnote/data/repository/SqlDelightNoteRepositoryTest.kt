@@ -81,6 +81,34 @@ class SqlDelightNoteRepositoryTest {
         assertEquals("n", hits[0].id)
     }
 
+    @Test fun plain_number_finds_a_grouped_amount() = runBlocking {
+        repo.upsert(note("n", "Rent 1,500"))
+        assertEquals(listOf("n"), repo.search("1500").map { it.id })
+    }
+
+    @Test fun grouped_number_finds_a_plain_amount() = runBlocking {
+        repo.upsert(note("n", "Rent 1500"))
+        assertEquals(listOf("n"), repo.search("1,500").map { it.id })
+    }
+
+    @Test fun decimal_search_ignores_the_point() = runBlocking {
+        repo.upsert(note("n", "Milk 12.50"))
+        assertEquals(listOf("n"), repo.search("12.5").map { it.id })
+    }
+
+    @Test fun separator_only_query_does_not_match_everything() = runBlocking {
+        repo.upsert(note("n", "Rent 1500"))
+        // "." strips to the empty string, and an empty needle would match the whole library.
+        // Matching prose that literally contains a period is correct; matching "Rent 1500" is not.
+        assertEquals(emptyList(), repo.search("."))
+        assertEquals(emptyList(), repo.search(","))
+    }
+
+    @Test fun word_query_is_unaffected_by_the_number_branch() = runBlocking {
+        repo.upsert(note("n", "Rent 1,500"))
+        assertEquals(emptyList(), repo.search("zebra"))
+    }
+
     @Test fun archive_hides_from_recent() = runBlocking {
         repo.upsert(note("a", "first"))
         repo.upsert(note("b", "second"))
