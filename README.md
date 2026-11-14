@@ -1,5 +1,6 @@
 # Aritiq
 
+
 Offline notes + calculator for Android. Write a list, type `total`, and the sum shows up
 live — paper-notebook style. No accounts, no network for your data — everything stored
 locally. The only network call is the optional in-app update check against GitHub Releases.
